@@ -1,0 +1,158 @@
+xmail-1.22系统抽象层开发编译攻略
+
+## 在LINUX平台上
+
+  。选择一个工作目录
+
+  。解包xmail-1.22.orig.tar.gz
+      tar zxvf xmail-1.22.orig.tar.gz
+
+  。打上HPUX补丁
+      patch -p0 < xmail-1.22-hpux.diff
+
+  。重新打包成HPUX平台使用的tarball
+      tar zcvf xmail-1.22.tar.gz xmail-1.22
+
+  。ftp到HPUX平台
+
+## 在HPUX平台上
+
+  。选择一个目录，解包xmail-1.22.tar.gz
+      gunzip xmail-1.22.tar.gz
+      tar xvf xmail-1.22.tar
+
+  。另建立一个开发主目录
+
+  。从解包后的xmail-1.22目录中抽取以下文件，放到开发主目录中。
+      AppDefines.h      
+      CommTypes.h       
+      Errors.cpp        
+      Errors.h          
+      MkMachDep.cpp     
+      StrUtils.h        
+      SvrConfig.h       
+      SvrDefines.h      
+      SysDep.cpp        
+      SysDep.h          
+      SysDepHPUX.cpp    
+      SysInclude.h      
+      SysIncludeHPUX.h  
+      SysLists.h        
+      SysMacros.h       
+      SysTypes.h        
+      SysTypesHPUX.h    
+
+  。再把xsys.cpp和xsys.h放到开发主目录中。
+
+  。准备好libftp-5.0，请参考相关章节。
+
+  。准备好tap310，请参考相关章节。
+
+  。因xmail的原因，需要在main()所在的文件中定义一个全局变量bool bServerDebug = false;
+    否则编译时会出错。
+
+  。将本文中带的Makefile.hpux，复制到HPUX平台，最好用ULTRAEDIT转换为UNIX文件格式，
+    同时注意规则行开头的空白是TAB，否则make会报错。
+
+  。具体开发时，可能还需要修改Makefile.hpux，可以根据相应定义好的变量位置填入即可。
+
+  。在开发主目录中，用make -f Makefile.hpux编译。Enjoy !
+  
+## Makefile.hpux for xsys
+
+SYSTYPE = HPUX
+O = o
+CPP = cpp
+CC = aCC
+LD = aCC
+STRIP = strip
+
+FTPDIR = libftp-5.0
+TAP310 = tap310
+
+CFLAGS = -I. -D__UNIX__ -D__HPUX__ -D_REENTRANT=1 -D_THREAD_SAFE=1 -DHAS_SYSMACHINE
+LDFLAGS = -L${FTPDIR} -L${TAP310} -ldld -lpthread -lftp -ltap310
+LDFLAGS_2 = -ldld -lpthread
+
+OUTDIR = bin
+
+MKMACHDEPINC = SysMachine.h
+MKMACHDEP = ${OUTDIR}/MkMachDep
+MKMACHDEPSRCS = MkMachDep.${CPP}
+MKMACHDEPOBJS = MkMachDep.${O}
+
+SVR = svr
+
+SVRSRCS = xsys.${CPP} SysDep.${CPP} Errors.${CPP} ${SVR}.${CPP}
+SVROBJS = ${SVRSRCS:.${CPP}=.${O}}
+
+.cpp.o:
+        ${CC} ${CFLAGS} -c $<
+
+all: ${OUTDIR} ${MKMACHDEPINC} ${SVR}
+
+${OUTDIR}:
+        @mkdir ${OUTDIR}
+
+${MKMACHDEPINC}: ${MKMACHDEP}
+        ./${MKMACHDEP} > ${MKMACHDEPINC}
+
+${MKMACHDEP}: ${MKMACHDEPOBJS}
+        ${LD} -o ${MKMACHDEP} ${MKMACHDEPOBJS} ${LDFLAGS_2}
+        ${STRIP} ${MKMACHDEP}
+
+${SVR}: ${SVROBJS}
+        ${LD} -o ${SVR} ${SVROBJS} ${LDFLAGS}
+        ${STRIP} ${SVR}
+
+clean:
+        rm -f *.${O} ${MKMACHDEPINC} ${MKMACHDEP} ${SVR}
+        rm -rf ${OUTDIR}
+
+
+## libftp-5.0
+
+1. 将libftp-5.0-src-11.00.tar.gz在HPUX平台上解包，放在开发主目录的libftp-5.0子目录中。
+2. 用make生成libftp.a和libftp.sl，用于开发调用，函数原型在FtpLibrary.h中。
+
+
+## tap310模块
+
+1. 将tap310的.c和.h文件放在开发主目录的tap310子目录中。
+2. 参考以下内容，修改asn_system.h文件。
+3. 参考以下内容，建立Makefile.hpux文件。
+4. make生成libtap310.a和libtap310.sl，用于开发调用。
+
+## 注释掉asn_system.h中以下代码
+
+// #if   (!defined(__FreeBSD__) || !defined(_SYS_INTTYPES_H_))
+// #if   defined(sun)
+// #include <alloca.h>   /* For alloca(3) */
+// #include <ieeefp.h>   /* for finite(3) */
+// #else
+// #include <stdint.h>   /* SUSv2+ and C99 specify this file, for uintXX_t */
+// #endif        /* defined(sun) */
+// #endif
+
+## Makefile.hpux for tap310
+
+ASN_MODULE_SOURCES= ......
+ASN_MODULE_HEADERS= ......
+
+OBJS = ${ASN_MODULE_SOURCES:.c=.o}
+
+CC = aCC
+CFLAGS = -I. -Ae -O +Z
+
+all: libtap310
+
+libtap310: ${OBJS}
+        ar cruv libtap310.a ${OBJS}
+        ld -b -s -o libtap310.sl ${OBJS}
+
+.c.o:
+        ${CC} ${CFLAGS} -c $<
+
+clean:
+        rm -f libtap310.a libtap310.sl
+        rm -f ${OBJS}

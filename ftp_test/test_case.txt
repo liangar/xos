@@ -1,0 +1,15 @@
+// 用ftp_test测试
+c:ftp.ea-europe.com,ftp,ftp
+S:
+l:
+g:welcome.msg,welcome.msg
+d:
+
+// 用telnet 取得ftp站点的具体情况
+telnet ftp.ea-europe.com 21
+USER ftp
+PASS ftp
+TYPE I
+PASV
+SYST
+QUIT

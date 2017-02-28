@@ -1,0 +1,52 @@
+0.0.3
+-----
+
+	- new connection constructor working in the way
+	open method does;
+
+	- an optional type parameter for statement.bind -
+	variable data type;
+
+	- new ++ operator for the result set = next row;
+
+	- revised exception handling;
+
+	- stricter data retrieval by using const methods
+	in column and parameter classes;
+
+	- initialize and cleanup private methods for
+	most of the classes;
+
+	- objects are initialized completely in the constructor
+	(this is invisible from the user code);
+
+	- public interface does not require user code changes;
+
+	- test suite created;
+
+0.0.2
+-----
+
+	- inserted preprocessor directives to make porting
+	easier;
+
+	- added error.details method;
+
+	- error.display method will be optionally included
+	depending whether ORALIB_NO_ERROR_DISPLAY macro
+	is defined or not (in oralib.h);
+
+	- datetime.min method renamed to minute,
+	because of min macro name conflict;
+
+	- private copy-constructor and assignment operator
+	defined for the following classes:
+	connection, statement, paremeter, resultset, column;
+
+	- private assignment operator defined for
+	error class;
+
+0.0.1
+-----
+
+	- created;

@@ -1,0 +1,138 @@
+==============
+test case
+==============
+
+1. 命令行调试
+telnet 192.168.2.5 110
+USER pmn2@ehur.mobile.com.cn
+PASS pmn2
+STAT
+LIST
+TOP
+QUIT
+
+telnet 192.168.2.5 110
+USER usaat@ehur.mobile.com.cn
+PASS 8
+STAT
+LIST
+TOP
+QUIT
+
+telnet 132.32.19.31 110
+USER test1@cmszov.com
+PASS 111111
+STAT
+LIST
+TOP
+QUIT
+
+telnet 192.168.2.5 25
+HELO pmn1
+MAIL FROM: <pmn1@ehur.mobile.com.cn>
+RCPT TO:<pmn2@ehur.mobile.com.cn>
+
+telnet moon 25
+HELO pmn1
+MAIL FROM: <pmn1@ehur.mobile.com.cn>
+RCPT TO:<pmn2@ehur.mobile.com.cn>
+
+telnet moon 110
+USER pmn2@ehur.mobile.com.cn
+PASS pmn2
+STAT
+LIST
+TOP
+QUIT
+
+telnet mail.poisesoft.com 110
+USER liangar@poisesoft.com
+PASS tgyygph
+STAT
+LIST
+RETR 1
+QUIT
+
+USER
+PASS
+APOP
+STAT
+LIST
+UIDL
+QUIT
+RETR
+TOP
+DELE
+NOOP
+LAST
+RSET
+
+
+telnet 132.32.20.19 110
+USER ehurtest@chinamobile-clearinghouse.com
+PASS 123456
+STAT
+LIST
+
+telnet 132.32.20.19 25
+HELO pmn1
+MAIL FROM: <billing@chinamobile-clearinghouse.com>
+RCPT TO:<pmn2@ehur.mobile.com.cn>
+
+telnet 132.32.20.19 25
+EHEL pmn1
+MAIL FROM: <billing@chinamobile-clearinghouse.com>
+RCPT TO:<pmn2@ehur.mobile.com.cn>
+
+2. 单元测试
+用测试程序email_test测试，对于测试程序的命令解释，在运行时用“?“命令就可看到
+下面是一些例子，实际测试时，需要将john,pmn1,2等用户以及服务器192.168.2.5,pop.21cn.com,smtp.21cn.com换成实际的
+测试程序g:只保存一附件可以指定第几个附件
+
+d:ehur,ehur,ehur
+
+接收
+r:192.168.2.5,pmn2@ehur.mobile.com.cn,pmn2
+g:1,D:\user\liangar\develop\appsys\eHUR\src\c\email\email_test\temp
+c:
+
+发送
+s:132.32.20.19,billing@chinamobile-clearinghouse.com,52cmsz
+a:D:\user\liangar\develop\ehur\src\c\email\email_test\netarch.jpg
+S:liangar@163.com,send jpg 文件
+
+s:archclearing.com,ehur-arch@archclearing.com,ehur2-arch
+a:D:\user\liangar\develop\ehur\src\c\email\email_test\netarch.jpg
+S:ehur-arch@archclearing.com,liangar@163.com,send jpg 文件
+
+接收
+r:pop.tom.com,liangar@tom.com,***
+g:1,D:\user\liangar\develop\xos\email\email_test
+c:
+
+发送
+s:solar,pmn1@ehur.mobile.com.cn,pmn1
+a:D:\user\liangar\develop\appsys\eHUR\src\c\email\email_test\netarch.jpg
+S:pmn1@ehur.mobile.com.cn,pmn2@ehur.mobile.com.cn,send jpg 文件
+
+r:mail.poisesoft.com,liangar@poisesoft.com,***
+g:1,D:\user\liangar\develop\xos\email\email_test\temp
+c:
+
+s:smtp.,liangar@poisesoft.com,tgyygph
+s:mail.poisesoft.com,liangar@poisesoft.com,tgyygph
+a:K:\user\liangar\develop\xos\email_test\temp\login.jpg
+S:liangar@poisesoft.com,liangar@tom.com,loginjpg
+
+s:smtp.21cn.com,liangar,sshqyzg
+a:K:\user\liangar\develop\xos\email_test\temp\login.jpg
+S:liangar@21cn.com,liangar@tom.com,sendjpg
+
+s:smtp.163.com,liangar@163.com,sshqyzg
+a:K:\user\liangar\develop\xos\email_test\temp\login.jpg
+S:liangar@163.com,liangar@21cn.com,sendjpg
+
+
+发送空消息的邮件时有问题
+读入邮件附件可以精简(用libs)
+

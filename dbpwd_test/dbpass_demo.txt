@@ -1,0 +1,13 @@
+#include  "CDBPasswd.h"
+
+        CDBPasswd  objDbPass;
+        if( !objDbPass.Init() )
+        {
+                cerr << "objDbPass³õÊ¼»¯Ê§°Ü!" << endl;
+                g_objLogFile.WriteSerious( "CIoTap311ValSvr",
+                                   "",
+                                   -1,
+                                   "¶ÁÈ¡ÃÜÂë³õÊ¼»¯Ê§°Ü!" );
+                return ACS_FAILED;
+        }
+        m_sPass = objDbPass.GetPass( m_sUser );

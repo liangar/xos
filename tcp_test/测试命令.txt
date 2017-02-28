@@ -1,0 +1,7 @@
+start 启动tcp服务
+stop  结束tcp服务
+send  发送数据
+put   测试队列，往队列放数据
+get   测试队列，从队列取数据
+help  帮助
+|     退出
