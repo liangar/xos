@@ -14,9 +14,35 @@ char * time2simpledate(char *d, long t);/*!< 将时间转为简单格式"YYYYMMDD" */
 char * getnextdate(char *d, char *s);	/*!< 取s的下一天,格式为:"YYYYMMDD" */
 char * getnextdate(char * s);			/// 在原位置上取下一天:YYYYMMDD
 
+char * getnexthour(char *d, char *s);	/*!< 取s的下一小时,格式为:"YYYYMMDDhhmmss" */
+char * getnexthour(char * s);			/// 在原位置上取下一小时:YYYYMMDDhhmmss
+
+char * getnextquarter(char *d, char *s);	/*!< 取s的下一刻,格式为:"YYYYMMDDhhmmss" */
+char * getnextquarter(char * s);			/// 在原位置上取下一刻:YYYYMMDDhhmmss
+
+char * getprevdate(char *d, char *s);	/*!< 取s的上一天,格式为:"YYYYMMDD" */
+char * getprevdate(char * s);			/// 在原位置上取上一天:YYYYMMDD
+
+char * getprevyear(char * d, char * s);/// YYYYMMDD
+char * getprevyear(char * s);			/// YYYYMMDD 用原位置
+long   getprevyear(long t);			/// 取当前的前一年
+
+char * getprevmonthday(char * d, char * s);/// YYYYMMDD
+char * getprevmonthday(char * s);			/// YYYYMMDD 用原位置
+long   getprevmonthday(long t);			/// 取当前的前个月
+
 char * getPrevMonth(char * d, char * s);/// YYYYMM
 char * getPrevMonth(char * s);			/// YYYYMM 用原位置
 long   getPrevMonth(long t);			/// 取当前的前个月
+
+char * getnextmonth(char * d, char * s);/*!< 取s的下一月,格式为:"YYYYMMDD" */
+char * getnextmonth(char * s);			/// 在原位置上取下一月:YYYYMMDD
+//long   getnextmonth(long t);			/// 取当前的下个月
+
+long getmaxdaywithmonth(int year, int month);	//取得一个月最后一天，返回DD，month取值1-12
+long getmaxdaywithmonth(char * s);	//取得一个月最后一天，返回DD
+
+long getnextimebyminute(char * hhmm);	///计算下一个时刻距离现在的分钟数
 
 long simple2time(const char * s);		/*!< 将简单格式串转为时间 */
 
@@ -35,6 +61,8 @@ long dt_today(void);
 long dt_year(long t);
 long dt_month(long t);
 long dt_day(long t);
+long dt_hour(long t);
+long dt_minute(long t);
 
 void To_Lower(char *s);		/*!< 将字符转为大写 */
 void To_Upper(char *s);		/*!< 将字符转为小写 */

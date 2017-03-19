@@ -133,7 +133,7 @@ bool xwork_server::start(void)
 	strcpy(m_cmd, "start");		/// add cmd = start (2011-12-27)
 	m_isrun = true;
 	for (int i = 0; i < m_works; i++){
-		_itoa(i, m_parms, 10);	/// set parm = thread seqno. (2011-12-27)
+		sprintf(m_parms, "%d", i);	/// set parm = thread seqno. (2011-12-27)
 		int r = m_phworker[i].init(master, this);
 		if (r < 0){
 			WriteToEventLog("%s : 不能建立第%d个工作线程, error=[%d]", m_name, i, r);
@@ -205,6 +205,10 @@ void xwork_server::notify(const char * cmd, const char * parms)
 
 void xwork_server::notify_stop(void)
 {
+	lock_prop(1);
+	m_isrun = false;
+	unlock_prop();
+
 	notify("stop");
 }
 

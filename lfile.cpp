@@ -51,6 +51,8 @@ int read_file (char ** d, const char * filename, long startpos, char * msg, int 
 	if (startpos > 0) {
 		if (_lseek(h, startpos, SEEK_SET) < 0){
 			xsnprintf(msg, lmsg, "rf_error[%d] : cannot seek the file[%s](%d).", filename, startpos);
+			free(buffer);
+			close(h);
 			return -2;
 		}
 		l -= startpos;

@@ -41,6 +41,10 @@ public:
 	int geterror(char * p, int maxlen);
 	int errcode(void);
 
+	void setlock(xsys_mutex* lock){
+		m_db_lock = lock;
+	}
+
 	long	m_lastTime;
 	char	m_lastsql[4096];
 
@@ -51,6 +55,7 @@ protected:
 
 protected:
     char *   m_pconnection;
+    xsys_mutex* m_db_lock;
 };
 
 class xsql3{

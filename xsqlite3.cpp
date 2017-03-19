@@ -22,6 +22,7 @@ xsqlite3::xsqlite3(const char * szconnectionstring)
     , m_pconnection(0)
 	, m_lastTime(0)
 {
+	m_db_lock = 0;
 	if (szconnectionstring != NULL){
         int l = strlen(szconnectionstring) + 1;
         if ((m_pconnection = (char *)malloc(l)) == NULL)  return;
@@ -115,10 +116,18 @@ int xsqlite3::trans_end(bool isok)
 {
 	int n;
     if (m_pdb == NULL)  return XSQL_ERROR;
+
+	if (m_db_lock)
+		m_db_lock->lock(2);
+
 	if (isok)
 		n = sqlite3_exec(m_pdb, "COMMIT", 0, 0, 0);
 	else
 		n = sqlite3_exec(m_pdb, "ROLLBACK",0,0, 0);
+
+	if (m_db_lock)
+		m_db_lock->unlock();
+
     int r = checkcode(n);
 
 	return r;
@@ -183,8 +192,10 @@ int xsql3::preexec(const char * psql)
 
     sqlite3_stmt * pstmt;
     int r = sqlite3_prepare_v2(m_pdb->m_pdb, psql, -1, &pstmt, NULL);
-	if (r == SQLITE_OK)
+	if (r == SQLITE_OK){
         m_pstmt = pstmt;
+	}else
+		printf("preexec:sqlite3_prepare_v2(%d): %s\n", r, psql);
 
     m_pdb->set_lastsql(psql);
 

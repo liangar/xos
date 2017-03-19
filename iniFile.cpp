@@ -145,6 +145,7 @@ int ini_write_string(
 	int r = fseek(out, pos, SEEK_SET);
 	if (r < 0){
 		::free(buf);
+		fclose(out);
 		return 0;
 	}
 

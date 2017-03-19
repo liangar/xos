@@ -369,9 +369,48 @@ char * time2simpledate(char *d, long t)
 	return d;
 }
 
-char * getnextdate(char *d, char *s)
-{
-	long l = simple2time(s) + 24*60*60;
+char * getnextquarter(char *d, char *s) {
+	long l = simple2time(s) + 15 * 60;
+	time2simple(d, l);
+	return d;
+}
+char * getnextquarter(char * s) {
+	char t[16], d[16];
+	memcpy(t, s, 12);
+	t[12] = 0;
+
+	char * p = getnextquarter(d, t);
+	if (p == 0) {
+		return 0;
+	}
+
+	memcpy(s, d, 14);
+
+	return s;
+}
+
+char * getnexthour(char *d, char *s) {
+	long l = simple2time(s) + 60 * 60;
+	time2simple(d, l);
+	return d;
+}
+char * getnexthour(char * s) {
+	char t[16], d[16];
+	memcpy(t, s, 12);
+	t[12] = 0;
+
+	char * p = getnexthour(d, t);
+	if (p == 0) {
+		return 0;
+	}
+
+	memcpy(s, d, 14);
+
+	return s;
+}
+
+char * getnextdate(char *d, char *s) {
+	long l = simple2time(s) + 24 * 60 * 60;
 	time2simpledate(d, l);
 	return d;
 }
@@ -391,13 +430,209 @@ char * getnextdate(char * s)
 	return s;
 }
 
-long dt_nextday(long t)
-{
+char * getprevdate(char *d, char *s) {
+	long l = simple2time(s) - 24 * 60 * 60;
+	time2simpledate(d, l);
+	return d;
+}
+
+char * getprevdate(char * s) {
+	char t[12], d[12];
+	memcpy(t, s, 8);
+	t[8] = 0;
+
+	char * p = getprevdate(d, t);
+	if (p == 0) {
+		return 0;
+	}
+
+	memcpy(s, d, 8);
+
+	return s;
+}
+
+long getnextimebyminute(char * hhmm) {
+	struct tm tt;
+	char t[4];
+	time_t now = time(0);
+
+	memcpy(&tt, localtime(&now), sizeof(struct tm));
+	tt.tm_hour = 0;
+	tt.tm_min = 0;
+	tt.tm_sec = 0;
+
+	t[2] = 0;
+	if (*hhmm) {
+		t[0] = hhmm[0];
+		t[1] = hhmm[1];
+		tt.tm_hour = atoi(t);
+		if (hhmm[2]) {
+			t[0] = hhmm[2];
+			t[1] = hhmm[3];
+			tt.tm_min = atoi(t);
+//			if (hhmm[4]) {
+//				tt.tm_sec = atoi(hhmm + 4);
+//			}
+		}
+	}
+
+	long r = (long(mktime(&tt)) - now) / 60;
+	if (0 >= r) {
+		r += 24 * 60;
+	}
+	return r;
+}
+
+long dt_nextday(long t) {
 	char s[12], d[12];
 	sprintf(s, "%d", t);
 	getnextdate(d, s);
 
 	return long(atoi(d));
+}
+
+long getmaxdaywithmonth(int year, int month) {
+	switch (month) {
+	case 1:
+	case 3:
+	case 5:
+	case 7:
+	case 8:
+	case 10:
+	case 12:
+		return 31;
+	case 4:
+	case 6:
+	case 9:
+	case 11:
+		return 30;
+	case 2:
+		return ((((year % 4) == 0) && (year % 100) != 0) || (year % 400 == 0)) ? 29 : 28;
+	}
+	return 28;
+}
+
+long getmaxdaywithmonth(char * s) {
+	struct tm stime;
+	long l = simple2time(s);
+	memcpy(&stime, localtime((time_t *) &l), sizeof(struct tm));
+	return getmaxdaywithmonth(stime.tm_year + 1900, stime.tm_mon + 1);
+}
+
+char * getnextmonth(char * d, char * s) {
+	struct tm stime;
+	long l = simple2time(s);
+	memcpy(&stime, localtime((time_t *) &l), sizeof(struct tm));
+
+	if (12 == ++stime.tm_mon) {
+		stime.tm_mon = 0;
+		stime.tm_year++;
+	}
+
+	int maxday = getmaxdaywithmonth(stime.tm_year + 1900, stime.tm_mon + 1);
+	stime.tm_mday = maxday >= stime.tm_mday ? stime.tm_mday : maxday;
+
+//	if (28 < stime.tm_mday) {
+//		int y = stime.tm_year + 1900;
+//		int m = stime.tm_mon + 1;
+//		if (29 == stime.tm_mday) {
+//			if (2 == m && !((((y % 4) == 0) && (y % 100) != 0) || (y % 400 == 0))) stime.tm_mday = 28;
+//		} else if (30 == stime.tm_mday) {
+//			if (2 == m && ((((y % 4) == 0) && (y % 100) != 0) || (y % 400 == 0)))
+//				stime.tm_mday = 29;
+//			else
+//				stime.tm_mday = 28;
+//		} else if (31 == stime.tm_mday) {
+//			if (2 == m) {
+//				if (((((y % 4) == 0) && (y % 100) != 0) || (y % 400 == 0)))
+//					stime.tm_mday = 29;
+//				else
+//					stime.tm_mday = 28;
+//			} else if (4 == m || 6 == m || 9 == m || 11 == m) stime.tm_mday = 30;
+//		}
+//	}
+	sprintf(d, "%04d%02d%02d", 1900 + stime.tm_year, stime.tm_mon + 1, stime.tm_mday);
+	return d;
+}
+
+char * getnextmonth(char * s) {
+	char t[12], d[12];
+	memcpy(t, s, 8);
+	t[8] = 0;
+
+	char * p = getnextmonth(d, t);
+	if (p == 0) {
+		return 0;
+	}
+
+	memcpy(s, d, 8);
+
+	return s;
+}
+
+/// YYYYMMDD
+char * getprevyear(char * d, char * s) {
+	long l = simple2time(s) - 365 * 24 * 60 * 60;
+	time2simpledate(d, l);
+	return d;
+}
+
+/// YYYYMMDD 用原位置
+char * getprevyear(char * s) {
+	char t[12], d[12];
+	memcpy(t, s, 8);
+	t[8] = 0;
+
+	char * p = getprevyear(d, t);
+	if (p == 0) {
+		return 0;
+	}
+
+	memcpy(s, d, 8);
+
+	return s;
+}
+
+/// 取当前的前一年
+long getprevyear(long t) {
+	return t - 365 * 24 * 60 * 60;
+}
+
+/// YYYYMMDD
+char * getprevmonthday(char * d, char * s) {
+	*d = 0;
+	long t = simple2time(s);
+	if (t == 0) return d;
+
+	t -= 30 * 24 * 60 * 60;
+	char v[16];
+	time2simple(v, t);
+	memcpy(d, v, 8);
+	d[8] = 0;
+
+	return d;
+}
+
+/// YYYYMMDD 用原位置
+char * getprevmonthday(char * s) {
+	char t[12], d[12];
+	memcpy(t, s, 8);
+	t[8] = 0;
+
+	char * p = getprevmonthday(d, t);
+	if (p == 0) {
+		return 0;
+	}
+
+	memcpy(s, d, 8);
+	s[8] = 0;
+
+	return s;
+}
+
+/// 取当前的前个月
+long getprevmonthday(long t) {
+	return t - 30 * 24 * 60 * 60;
 }
 
 /// YYYYMM
@@ -489,7 +724,7 @@ long simple2time(const char * s)
 bool dt_ValidDate(const char * s)
 {
 	int l = isdigits(s);
-	if (l < 0 || l != 8) {
+	if (l != 8) {
 		return false;
 	}
 	
@@ -510,7 +745,7 @@ bool dt_ValidDate(const char * s)
 bool dt_ValidTime(const char * s)
 {
 	int l = isdigits(s);
-	if (l < 0 || l != 6) {
+	if (l != 6) {
 		return false;
 	}
 	struct tm t;
@@ -530,7 +765,7 @@ bool dt_ValidTime(const char * s)
 bool dt_ValidDateTime(const char * s)
 {
 	int l = isdigits(s);
-	if (l < 0 || l != 14) {
+	if (l != 14) {
 		return false;
 	}
 	struct tm t;
@@ -603,8 +838,8 @@ void write_buf_log(const char * title, unsigned char * buf, int len)
 		for (j = 0; j < 16; j++){
 			static const char * pformats[] = {"%02X", "%02X "};
 			static const char * pblanks [] = {"  ", "   "};
-			unsigned char c;
 			if (n < len){
+				unsigned char c;
 				c = *p++;  n++;
 				sshow[j] = (c > 0x20 && c <= 126)? c : ' ';
 				l += sprintf(s+l, pformats[(j&0x01)], c);
@@ -717,8 +952,20 @@ long dt_day(long t)
 	return tnow.tm_mday;
 }
 
-bool all_is_digit(const char * s, int len)
-{
+long dt_hour(long t) {
+	struct tm tnow;
+
+	memcpy(&tnow, localtime((time_t *) &t), sizeof(struct tm));
+	return tnow.tm_hour;
+}
+long dt_minute(long t) {
+	struct tm tnow;
+
+	memcpy(&tnow, localtime((time_t *) &t), sizeof(struct tm));
+	return tnow.tm_min;
+}
+
+bool all_is_digit(const char * s, int len) {
 	if (len < 0) {
 		len = 10000;
 	}
@@ -728,7 +975,7 @@ bool all_is_digit(const char * s, int len)
 			return false;
 		}
 	}
-	return i>0;
+	return i > 0;
 }
 
 /// 全空

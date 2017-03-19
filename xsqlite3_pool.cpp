@@ -49,6 +49,8 @@ int xsqlite3_pool::init(
 	
 	m_list.init(m_maxnum, m_maxnum / 2);
 
+	m_db_lock.init();
+
 	m_mutex.init();
 	m_estop.init(0);
 
@@ -73,6 +75,9 @@ void xsqlite3_pool::down(void)
 		m_list[i].pdb->close();
 		delete m_list[i].pdb;
 	}
+
+	//modify by Freeman 2016-09-30 Must be after trans_end
+	m_db_lock.down();
 
 	m_list.free_all();
 
@@ -105,6 +110,7 @@ xsqlite3 * xsqlite3_pool::open(void)
 				}
 			}
 			if (pdb){
+				pdb->setlock(&m_db_lock);
 				pdb->trans_begin();
 				sprintf(m_lastmsg, "%s: use (%d).", szFunctionName, i);
 				pcon->isused = true;
@@ -123,6 +129,7 @@ xsqlite3 * xsqlite3_pool::open(void)
 			delete pdb;
 			pdb = 0;
 		}else{
+			pdb->setlock(&m_db_lock);
 			pdb->trans_begin();
 			if (m_list.m_count < m_maxnum){
 				xdb_control con;

@@ -61,6 +61,8 @@ public:
 protected:
 	xlist<xdb_control>	m_list;
 
+	xsys_mutex m_db_lock;
+
 	xsys_mutex m_mutex;
 	xsys_thread m_monitor;
 	xsys_event	m_estop;
