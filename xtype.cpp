@@ -42,6 +42,20 @@ int x_str2bcdv(char * d, const char * s, int len)
 	return (len+1)/2;
 }
 
+/// 0x10 0x32 0x54 0x76 0x98 -> "1032547698"
+/// 0x89 0x67 0x45 0x23 0x01 -> "8967452301"
+int x_bcd2strv(char * d, const char * s, int len)
+{
+	int i;
+	for (i = 0; i < len; i++) {
+		*d++ = ((s[i] & 0xf0) >> 4) | 0x30;
+		*d++ = (s[i] & 0x0f) | 0x30;
+	}
+	*d = 0;
+	return 2 * len;
+}
+
+
 /// 0x10 0x32 0x54 0x76 0x98 -> "9876543210"
 /// 0x89 0x67 0x45 0x23 0x01 -> "0123456789"
 int x_bcd2str(char * d, const char * s, int len)
@@ -79,6 +93,18 @@ void x_long2bcd(char * d, long v, int bytes)
 	}
 }
 
+/// 9876543210 -> 0x98 0x76 0x54 0x32 0x10
+void x_long2bcdv(char * d, long v, int bytes) {
+	int i, j;
+	memset(d, 0, bytes);
+	for (i = bytes - 1; v > 0 && i >= 0; i--) {
+		j = v % 100;
+		d[i] = ((j / 10) << 4) | (j % 10);
+		v /= 100;
+	}
+}
+
+
 /// 0x10 0x32 0x54 0x76 0x98 -> 9876543210
 int x_bcd2longv(const char *s, int bytes)
 {
@@ -115,6 +141,12 @@ void x_short2nt(unsigned char * d, unsigned short v)
 {
 	d[0] = (unsigned char)(v & 0xff);  v >>= 8;
 	d[1] = (unsigned char)(v & 0xff);
+}
+
+void x_short2ntv(unsigned char * d, unsigned short v)
+{
+	d[1] = (unsigned char)(v & 0xff);  v >>= 8;
+	d[0] = (unsigned char)(v & 0xff);
 }
 
 unsigned short x_nt2short(unsigned char * d)

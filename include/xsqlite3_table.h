@@ -44,6 +44,8 @@ template<class T>
 xsqlite3_table<T>::xsqlite3_table(void)
 {
 	xsql3::xsql3();
+	memset(&m_rec, 0, sizeof(T));
+	memset(m_msg, 0, sizeof(m_msg));
 }
 
 template<class T>

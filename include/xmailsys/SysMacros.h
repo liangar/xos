@@ -19,6 +19,9 @@
  *  Davide Libenzi <davidel@xmailserver.org>
  *
  */
+#ifdef WIN32
+#pragma warning (disable:4996)
+#endif
 
 #ifndef _SYSMACROS_H
 #define _SYSMACROS_H
