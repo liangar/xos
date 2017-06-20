@@ -312,7 +312,7 @@ int x_hex2array2(unsigned char * d, const char * s, int len)
 	return j;
 }
 
-// 0x1A 0x2B 0x3C 0x4D 0x05 -> "1A2B3C4D5"
+// 0x1A 0x2B 0x3C 0x4D 0x05 -> "1A2B3C4D05"
 int x_array2hex(char * d, const unsigned char * s, int len)
 {
 	int l = (len + 1) / 2;
