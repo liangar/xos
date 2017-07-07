@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+#include <l_str.h>
 #include <xtype.h>
 #include <ss_service.h>
 #include <xsys_log.h>
@@ -139,7 +140,7 @@ void main(int argc, char **argv)
 //	r = recv_data();
 
 	try{
-		char b[512];
+		char b[1024];
 		printf("peer ip: %s\n", g_sock.get_peer_ip(b));
 		printf("self ip: %s\n", g_sock.get_self_ip(b));
 
@@ -147,12 +148,15 @@ void main(int argc, char **argv)
 		while (g_sock.isopen()){
             cin.getline(b, sizeof(b));
 
+			if (strcmp(b, "exit") == 0)
+				break;
+
             r = strlen(b);
 			if (bisBIN){
 				r = x_hex2array((unsigned char *)sendbuf, b, r);
 				r = g_sock.send(sendbuf, r);
 			}else{
-				b[r++] = '\n';  b[r] = 0;
+				r = c2string(b, b);
 				r = g_sock.send(b, r);
 			}
 
@@ -161,7 +165,7 @@ void main(int argc, char **argv)
                 break;
 			}
             nsends += r;
-//			r = recv_data();
+			r = recv_data();
 		}
 	}catch(...){
 		printf("some error occured.\n");

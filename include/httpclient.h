@@ -58,7 +58,7 @@ typedef struct {
 	char* header;
 	char* buffer;			// response packet
 	int bufferSize;			// response buffer size
-	char* postPayload;		// post date(all parameters [name=value&]*)
+	char* postPayload;		// request post data(all parameters [name=value&]*)
 	char* hostname;
 	int postPayloadBytes;	// post bytes
 	int dataSize;			// response data size

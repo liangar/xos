@@ -8,6 +8,7 @@ char * getnowtime(char *t);			/*!< 取得当前时间的字符串,格式为"YYYY-MM-DD hh:mi:
 char * getsimple_now(char *t);		/*!< 取得当前时间的字符串,格式为"YYYYMMDDhhmiss" */
 char * time2string(char * d, long t);	/*!< 将时间转为格式为"YYYY-MM-DD hh:mi:ss"的字符串 */
 char * string2simple(char *d, char *s, bool bendflag = false);	/*!< 将时间串转为简单格式 */
+long   string2time(const char * s, bool bendflag = false); /// 将时间串转成时间
 char * simple2string(char * d, const char * s);
 char * time2simple(char * d, long t);	/*!< 将时间转为简单格式串 */
 char * time2simpledate(char *d, long t);/*!< 将时间转为简单格式"YYYYMMDD" */

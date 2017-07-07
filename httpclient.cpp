@@ -23,10 +23,10 @@
 #endif
 #define CONN_RETRIES 3
 #define HTTP_GET_HEADER "%s %s HTTP/1.%d\r\nAccept: */*\r\nConnection: %s\r\nUser-Agent: Mozilla/5.0\r\nHost: %s\r\n%s\r\n"
-#define HTTP_POST_HEADER "POST %s HTTP/1.0\r\nHost: %s\r\nContent-Type: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: %d\r\n%s\r\n"
-#define HTTP_POST_MULTIPART_HEADER "POST %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nAccept: text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\nAccept-Language: en-us,en;q=0.5\r\nAccept-Encoding: gzip,deflate\r\nAccept-Charset: ISO-8859-1;q=0.7,*;q=0.7\r\nKeep-Alive: 300\r\nConnection: keep-alive\r\nContent-Type: multipart/form-data; boundary=%s\r\nContent-Length: %d\r\n%s\r\n"
+#define HTTP_POST_HEADER "POST %s HTTP/1.1\r\nHost: %s\r\nContent-Type: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: %d\r\n%s\r\n"
+#define HTTP_POST_MULTIPART_HEADER "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nAccept: text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\nAccept-Language: en-us,en;q=0.5\r\nAccept-Encoding: gzip,deflate\r\nAccept-Charset: ISO-8859-1;q=0.7,*;q=0.7\r\nKeep-Alive: 300\r\nConnection: keep-alive\r\nContent-Type: multipart/form-data; boundary=%s\r\nContent-Length: %d\r\n%s\r\n"
 #define MULTIPART_BOUNDARY "---------------------------24464570528145"
-#define HTTP_POST_STREAM_HEADER "POST %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nAccept: text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\nAccept-Language: en-us,en;q=0.5\r\nAccept-Encoding: gzip,deflate\r\nAccept-Charset: ISO-8859-1;q=0.7,*;q=0.7\r\nKeep-Alive: 300\r\nConnection: close\r\nContent-Type: application/octet-stream; filename=%s\r\nContent-Length: %d\r\n%s\r\n"
+#define HTTP_POST_STREAM_HEADER "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nAccept: text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\nAccept-Language: en-us,en;q=0.5\r\nAccept-Encoding: gzip,deflate\r\nAccept-Charset: ISO-8859-1;q=0.7,*;q=0.7\r\nKeep-Alive: 300\r\nConnection: close\r\nContent-Type: application/octet-stream; filename=%s\r\nContent-Length: %d\r\n%s\r\n"
 
 const char http_post_contentType[] = "application/x-www-form-urlencoded";
 const char http_content_type_json_utf8[] = "application/json; charset=UTF-8";
@@ -96,11 +96,15 @@ void httpClean(HTTP_REQUEST* param)
 	}
 	if (param->buffer) {
 		free(param->buffer);
-		param->buffer = 0;
+		param->buffer = 0;  param->bufferSize = 0;
 	}
 	if (param->hostname){
 		free(param->hostname);
 		param->hostname = 0;
+	}
+	if (param->header){
+		free(param->header);
+		param->header = 0;
 	}
 }
 
@@ -220,7 +224,12 @@ int httpRequest(HTTP_REQUEST* param)
 		}
 
 		if (param->method == HM_POST) {
-			if (httpSend(param, param->postPayload, param->postPayloadBytes) != param->postPayloadBytes) break;
+			ret = httpSend(param, param->postPayload, param->postPayloadBytes);
+			if (ret != param->postPayloadBytes){
+				ret = -ret;
+				break;
+			}
+			ret = 0;
 		} else if (param->method == HM_POST_MULTIPART) {
 			POST_CHUNK* chunk;
 			int i;
@@ -312,11 +321,6 @@ int httpGetResponse(HTTP_REQUEST* param)
 		}
 		if (param->httpCode >= 404) {
 			DEBUG("Invalid response or file not found on server\n");
-			closesocket(param->sockfd);
-			param->sockfd=0;
-			param->state=HS_IDLE;
-			free(param->header);
-			param->header = 0;
 			return -1;
 		}
 		while ((p = strstr(p, "\r\n"))) {
@@ -405,10 +409,6 @@ int httpGetResponse(HTTP_REQUEST* param)
 		param->sockfd=0;
 	}
 	param->state=HS_IDLE;
-	if (!(param->flags & FLAG_KEEP_HEADER)) {
-		free(param->header);
-		param->header = 0;
-	}
 	return ret;
 }
 

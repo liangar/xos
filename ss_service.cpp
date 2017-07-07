@@ -299,6 +299,45 @@ char * time2string(char * d, long t)
 	return d;
 }
 
+long string2time(const char * s, bool bendflag)
+{
+	char tmp[32];
+	const char *p;
+	struct tm ltime;
+
+	memset(&ltime, 0, sizeof(ltime));
+	if (bendflag){
+		ltime.tm_hour = 23;
+		ltime.tm_min = 59;
+		ltime.tm_sec = 59;
+	}
+	else{
+		ltime.tm_hour = 0;
+		ltime.tm_min = 0;
+		ltime.tm_sec = 0;
+	}
+
+	p = getaword(tmp, s, '-');
+	ltime.tm_year = atoi(tmp) - 1900;
+	
+	p = getaword(tmp, p, '-') - 1;
+	ltime.tm_mon = atoi(tmp);
+	
+	p = getaword(tmp, p, ' ');
+	ltime.tm_mday = atoi(tmp);
+	
+	p = getaword(tmp, p, ':');
+	ltime.tm_hour = atoi(tmp);
+	
+	p = getaword(tmp, p, ':');
+	ltime.tm_min = atoi(tmp);
+	
+	p = getaword(tmp, p, ' ');
+	ltime.tm_sec = atoi(tmp);
+
+	return long(mktime(&ltime));
+}
+
 char * string2simple(char *d, char *s, bool bendflag)
 {
 	char tmp[32];
