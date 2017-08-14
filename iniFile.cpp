@@ -62,9 +62,13 @@ int ini_get_string(
 		// 返回单个值
 		if (pkey && pkey < pend){
 			const char * pp = getaword(v, pkey, " \t", "=");
-			getaline(resultString, pp+1);
+			getaline((char *)(pp+1), pp+1);
+			StrNCpy(resultString, pp+1, bufferSize);
 			::free(buf);
 			return int(strlen(resultString));
+		}else{
+			if (defaultValue && *defaultValue)
+				StrNCpy(resultString, defaultValue, bufferSize);
 		}
 		::free(buf);
 		return 0;

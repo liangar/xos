@@ -290,8 +290,8 @@ char *SysInetRevNToA(SYS_INET_ADDR const &AddrInfo, char *pszRevIP, int iSize)
 	switch (SysGetAddrFamily(AddrInfo)) {
 	case AF_INET:
 		pAddr = (SYS_UINT8 const *) &SYS_IN4(&AddrInfo)->sin_addr;
-		SysSNPrintf(pszRevIP, iSize, "%u.%u.%u.%u.",
-			    pAddr[0], pAddr[1], pAddr[2], pAddr[3]);
+		SysSNPrintf(pszRevIP, iSize, "%u.%u.%u.%u:%u",
+			pAddr[0], pAddr[1], pAddr[2], pAddr[3], ntohs(SYS_IN4(&AddrInfo)->sin_port));
 		break;
 
 #ifndef INET4
@@ -299,8 +299,7 @@ char *SysInetRevNToA(SYS_INET_ADDR const &AddrInfo, char *pszRevIP, int iSize)
 		pAddr = (SYS_UINT8 const *) &SYS_IN6(&AddrInfo)->sin6_addr;
 		for (i = 15, pszCur = pszRevIP; i >= 0 && iSize > 4;
 		     i--, pszCur += 4, iSize -= 4)
-			SysSNPrintf(pszCur, iSize, "%x.%x.", pAddr[i] & 0xf,
-				    pAddr[i] >> 4);
+			SysSNPrintf(pszCur, iSize, "%x.%x", pAddr[i] & 0xf, pAddr[i] >> 4);
 		break;
 #endif
 

@@ -16,6 +16,10 @@
 #define MAX_PATH 256
 #endif // MAX_PATH
 
+#ifndef MAX_IP_LEN
+#define MAX_IP_LEN 32
+#endif
+
 #ifndef MAX_HOST_NAME
 #define MAX_HOST_NAME	128
 #endif // MAX_HOST_NAME
@@ -52,7 +56,7 @@ public:
 	void down(void);	/*!< 关闭函数. */
 
 	bool isopen(void)  {  return (m_event != SYS_INVALID_EVENT);  }
-	
+
 	//! 等待
 	/*!
 	 * \param seconds 超时秒数,如果<=0,则为无限
@@ -224,6 +228,7 @@ public:
 
 	/// 监听
 	int listen(int nportnumber, int iconnections = 1);
+	int udp_listen(int nportnumber);
 
 	/// 进入服务
 	int accept(xsys_socket & client_sock, unsigned int timeout_ms = 0);
@@ -233,7 +238,7 @@ public:
 	/// \param nportnumber 端口
 	/// \param timeout 超时时间(秒)
 	/// \return 0/else 0/出错码
-	int connect(const char * lphostname, int nportnumber = 0, int timeout = 30);
+	int connect(const char * lphostname, int nportnumber = 0, int timeout = 30, bool is_tcp = true);
 
 	void close(void);	/*!< 关闭 */
 	int isopen(void);	/*!< 是否打开 */
@@ -250,6 +255,8 @@ public:
 	 *        出错码的文字解释可以通过xgeterror_string函数取得
 	 */
 	int recv(char * buf, int l, int timeout = SYS_INFINITE_TIMEOUT);
+	int recv_from(char * buf, int len, char * peer_ip, int timeout = SYS_INFINITE_TIMEOUT);
+	int recv_from(char * buf, int len, SYS_INET_ADDR * from_addr, int timeout = SYS_INFINITE_TIMEOUT);
 
 	//! 发送
 	/*!
@@ -260,6 +267,7 @@ public:
 	 *        出错码的文字解释可以通过xgeterror_string函数取得
 	 */
 	int send(const char * buf, int l, int timeout = 10);
+	int sendto(const char * buf, int l, const SYS_INET_ADDR *pto_addr, int timeout = 10);
 
 	/// 接收并检查结束符
 	/// \brief 接收,直到出错,收满,或者得到结束符为止<br>
@@ -361,7 +369,7 @@ const char * xsys_ltoa(long l);
 
 #ifndef WIN32
 /// 将串中的小写字母转换为大写字母
-	char *strupr(char *str); 
+	char *strupr(char *str);
 #endif
 
 int xsys_do_cmd(const char * cmd, const char * workpath, char * outbuf, int len);

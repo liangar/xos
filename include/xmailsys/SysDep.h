@@ -23,6 +23,12 @@
 #ifndef _SYSDEP_H
 #define _SYSDEP_H
 
+#ifndef IPV6
+#define SYS_INET_ADDR_LEN	32
+#else
+#define SYS_INET_ADDR_LEN	128
+#endif
+
 #define SYS_SHUTDOWN_SOFT           0
 
 #define LOG_LEV_DEBUG               0
@@ -64,7 +70,7 @@ struct SYS_FILE_INFO {
 
 struct SYS_INET_ADDR {
 	int iSize;
-	unsigned char Addr[128 - sizeof(int)];
+	unsigned char Addr[SYS_INET_ADDR_LEN - sizeof(int)];
 };
 
 typedef SYS_UINT32 NET_ADDRESS;

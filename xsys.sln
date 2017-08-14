@@ -1,15 +1,5 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Express 2012 for Windows Desktop
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BasicExcel", "learning\BasicExcel\BasicExcel.vcxproj", "{C6BF8D7A-E623-4659-AA4E-CD68FCA6EFDB}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "db_test", "db_test\db_test.vcxproj", "{D59E192F-ECE4-4FD1-B164-8E47A695767E}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "email_test", "email_test\email_test.vcxproj", "{7DAB0F44-CC5B-464B-9CF8-81D1E6E4FA23}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ftp_test", "ftp_test\ftp_test.vcxproj", "{5E1F200B-F270-4198-9C1E-CA3179D47942}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gzip_test", "gzip_test\gzip_test.vcxproj", "{C7402D15-1F9A-4746-961C-705F929E2378}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "xsys", "xsys.vcxproj", "{2CE92440-A3D2-4ADD-BCFD-A9D46E786ACE}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sqlite3", "..\import\sqlite\sqlite3\sqlite3.vcxproj", "{2975E1CF-7857-4A48-97ED-E49834C356B4}"
@@ -22,27 +12,14 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tcp_test", "tcp_test\tcp_te
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ps_monitor", "ps_monitor\ps_monitor.vcxproj", "{424A6186-0969-4E91-A79B-C72045D24EB4}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "udp_server_test", "udp_server_test\udp_server_test.vcxproj", "{EDD64F89-9A5D-4ABC-BBED-7203DDEEC651}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
 		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{C6BF8D7A-E623-4659-AA4E-CD68FCA6EFDB}.Debug|Win32.ActiveCfg = Debug|Win32
-		{C6BF8D7A-E623-4659-AA4E-CD68FCA6EFDB}.Debug|Win32.Build.0 = Debug|Win32
-		{C6BF8D7A-E623-4659-AA4E-CD68FCA6EFDB}.Release|Win32.ActiveCfg = Release|Win32
-		{D59E192F-ECE4-4FD1-B164-8E47A695767E}.Debug|Win32.ActiveCfg = Debug|Win32
-		{D59E192F-ECE4-4FD1-B164-8E47A695767E}.Debug|Win32.Build.0 = Debug|Win32
-		{D59E192F-ECE4-4FD1-B164-8E47A695767E}.Release|Win32.ActiveCfg = Release|Win32
-		{7DAB0F44-CC5B-464B-9CF8-81D1E6E4FA23}.Debug|Win32.ActiveCfg = Debug|Win32
-		{7DAB0F44-CC5B-464B-9CF8-81D1E6E4FA23}.Debug|Win32.Build.0 = Debug|Win32
-		{7DAB0F44-CC5B-464B-9CF8-81D1E6E4FA23}.Release|Win32.ActiveCfg = Release|Win32
-		{5E1F200B-F270-4198-9C1E-CA3179D47942}.Debug|Win32.ActiveCfg = Debug|Win32
-		{5E1F200B-F270-4198-9C1E-CA3179D47942}.Debug|Win32.Build.0 = Debug|Win32
-		{5E1F200B-F270-4198-9C1E-CA3179D47942}.Release|Win32.ActiveCfg = Release|Win32
-		{C7402D15-1F9A-4746-961C-705F929E2378}.Debug|Win32.ActiveCfg = Debug|Win32
-		{C7402D15-1F9A-4746-961C-705F929E2378}.Debug|Win32.Build.0 = Debug|Win32
-		{C7402D15-1F9A-4746-961C-705F929E2378}.Release|Win32.ActiveCfg = Release|Win32
 		{2CE92440-A3D2-4ADD-BCFD-A9D46E786ACE}.Debug|Win32.ActiveCfg = Debug|Win32
 		{2CE92440-A3D2-4ADD-BCFD-A9D46E786ACE}.Release|Win32.ActiveCfg = Release|Win32
 		{2975E1CF-7857-4A48-97ED-E49834C356B4}.Debug|Win32.ActiveCfg = Debug|Win32
@@ -62,6 +39,10 @@ Global
 		{424A6186-0969-4E91-A79B-C72045D24EB4}.Debug|Win32.Build.0 = Debug|Win32
 		{424A6186-0969-4E91-A79B-C72045D24EB4}.Release|Win32.ActiveCfg = Release|Win32
 		{424A6186-0969-4E91-A79B-C72045D24EB4}.Release|Win32.Build.0 = Release|Win32
+		{EDD64F89-9A5D-4ABC-BBED-7203DDEEC651}.Debug|Win32.ActiveCfg = Debug|Win32
+		{EDD64F89-9A5D-4ABC-BBED-7203DDEEC651}.Debug|Win32.Build.0 = Debug|Win32
+		{EDD64F89-9A5D-4ABC-BBED-7203DDEEC651}.Release|Win32.ActiveCfg = Release|Win32
+		{EDD64F89-9A5D-4ABC-BBED-7203DDEEC651}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

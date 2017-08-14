@@ -712,19 +712,29 @@ char * simple2string(char * d, const char * s)
 {
 	int l = strlen(s);
 
-	if (l == 14){
+	if (l > 8){
 		// date YYYYMMDDhhmmss -> YYYY-MM-DD hh:mm:ss
-		d[18] = s[13];  d[17] = s[12];  d[16] = ':';
-		d[15] = s[11];  d[14] = s[10];  d[13] = ':';
+		if (l == 14){
+			d[18] = s[13];  d[17] = s[12];
+		}else{
+			d[18] = '0';  d[17] = '0';
+		}
+		d[16] = ':';
+		if (l == 12){
+			d[15] = s[11];  d[14] = s[10];
+		}else{
+			d[15] = '0';  d[14] = '0';
+		}
+		d[13] = ':';
+
 		d[12] = s[ 9];  d[11] = s[ 8];  d[10] = ' ';
+		d[19] = 0;
 	}	
 	d[9] = s[7];  d[8] = s[6];  d[7] = '-';
 	d[6] = s[5];  d[5] = s[4];  d[4] = '-';
 
 	memcpy(d, s, 4);
-	if (l == 14)
-		d[19] = 0;
-	else
+	if (l <= 8)
 		d[10] = 0;
 	return d;
 }

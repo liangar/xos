@@ -124,7 +124,7 @@ int xsys_semaphore::P(int ms)
 	if (r == 0 && m_psem_bind){
 		m_psem_bind->P(500);
 	}
-	
+
 	return r;
 }
 
@@ -134,7 +134,7 @@ int xsys_semaphore::V(int iCount)
 	if (r == 0 && m_psem_bind){
 		m_psem_bind->V(iCount);
 	}
-	
+
 	return r;
 }
 
@@ -334,7 +334,7 @@ static int MscGetServerAddress(char const *purl, SYS_INET_ADDR & SvrAddr, int ip
 	strcpy(url, purl);
 
 	char * p;	int port;
-	
+
 	port = iport;
 	if ((p = strchr(url, ':')) != NULL){
 		*p++ = '\0';
@@ -376,8 +376,7 @@ int xsys_socket::listen(int nportnumber, int iconnections)
 
 	SysInetAnySetup(InSvrAddr, AF_INET, nportnumber);
 
-	if (SysBindSocket(sock, &InSvrAddr) <
-		0)
+	if (SysBindSocket(sock, &InSvrAddr) < 0)
 	{
 		ErrorPush();
 		SysCloseSocket(sock);
@@ -385,6 +384,30 @@ int xsys_socket::listen(int nportnumber, int iconnections)
 	}
 
 	SysListenSocket(sock, iconnections);
+
+	m_sock = sock;
+	m_isserver = 1;
+
+	return 0;
+}
+
+int xsys_socket::udp_listen(int nportnumber)
+{
+	SYS_SOCKET sock = SysCreateSocket(AF_INET, SOCK_DGRAM, 0);
+
+	if (sock == SYS_INVALID_SOCKET)
+		return (ErrGetErrorCode());
+
+	SYS_INET_ADDR InSvrAddr;
+
+	SysInetAnySetup(InSvrAddr, AF_INET, nportnumber);
+
+	if (SysBindSocket(sock, &InSvrAddr) < 0)
+	{
+		ErrorPush();
+		SysCloseSocket(sock);
+		return (ErrorPop());
+	}
 
 	m_sock = sock;
 	m_isserver = 1;
@@ -414,14 +437,14 @@ int xsys_socket::accept(xsys_socket & client_sock, unsigned int timeout_ms)
 	return 0;
 }
 
-int xsys_socket::connect(const char * lphostname, int nportnumber, int timeout)
+int xsys_socket::connect(const char * lphostname, int nportnumber, int timeout, bool is_tcp)
 {
 	SYS_INET_ADDR SvrAddr;
 
 	if (MscGetServerAddress(lphostname, SvrAddr, nportnumber) < 0)
 		return (ErrGetErrorCode());
 
-	SYS_SOCKET sock = SysCreateSocket(AF_INET, SOCK_STREAM, 0);
+	SYS_SOCKET sock = SysCreateSocket(AF_INET, (is_tcp? SOCK_STREAM : SOCK_DGRAM), 0);
 
 	if (sock == SYS_INVALID_SOCKET)
 		return (ErrGetErrorCode());
@@ -502,6 +525,33 @@ int xsys_socket::recv(char * buf, int l, int timeout)
 	return SysRecvData(m_sock, buf, l, timeout);
 }
 
+
+int xsys_socket::recv_from(char * buf, int len, char * peer_ip, int timeout)
+{
+	SYS_INET_ADDR peer_addr;
+
+	int r = recv_from(buf, len, &peer_addr, timeout);
+
+	if (r > 0)
+		SysInetRevNToA(peer_addr, peer_ip, MAX_IP_LEN);
+
+	return r;
+}
+
+int xsys_socket::recv_from(char * buf, int len, SYS_INET_ADDR * pfrom_addr, int timeout)
+{
+	if (m_sock == SYS_INVALID_SOCKET) {
+		return -1;
+	}
+	if (timeout < 0){
+		timeout = SYS_INFINITE_TIMEOUT;
+	}
+	if (len == 0)
+		return 0;
+
+	return SysRecvDataFrom(m_sock, pfrom_addr, buf, len, timeout);
+}
+
 int xsys_socket::send(const char * buf, int l, int timeout)
 {
 	if (m_sock == SYS_INVALID_SOCKET) {
@@ -512,6 +562,25 @@ int xsys_socket::send(const char * buf, int l, int timeout)
 	}else
 		timeout *= 1000;
 	return SysSendData(m_sock, buf, l, timeout);
+}
+
+int xsys_socket::sendto(const char * buf, int len, const SYS_INET_ADDR *pto_addr, int timeout_ms)
+{
+	if (m_sock == SYS_INVALID_SOCKET) {
+		return -1;
+	}
+	if (timeout_ms < 0)
+		timeout_ms = SYS_INFINITE_TIMEOUT;
+
+	int sent_bytes = 0;
+	while (sent_bytes < len){
+		int current_snd = SysSendDataTo(m_sock, pto_addr, buf, len-sent_bytes, timeout_ms);
+		if (current_snd < 0)
+			break;
+		sent_bytes += current_snd;
+	}
+
+	return sent_bytes;
 }
 
 int xsys_socket::recv_byend(char * buf, int maxlen, char * endstr, int timeout)
@@ -701,8 +770,8 @@ int xsys_cp(const char * new_name, const char * old_name)
 	memset(cmd, 0x0, sizeof(cmd));
 	memset(path, 0x0, sizeof(path));
 	memset(errbuf, 0x0, sizeof(errbuf));
-	
-	if (new_name == NULL || new_name[0] == '\0' || 
+
+	if (new_name == NULL || new_name[0] == '\0' ||
 		old_name == NULL || old_name[0] == '\0'){
 		return -1;
 	}
@@ -710,11 +779,11 @@ int xsys_cp(const char * new_name, const char * old_name)
 	if (SysExistFile(old_name) == 0){
 		return -2;
 	}
-	
+
 	if (!xsys_md(new_name, true)){
 		return -3;
 	}
-	
+
 #ifdef WIN32
 	if (!::CopyFile(old_name, new_name, false)){
 		r = -4;
@@ -727,53 +796,53 @@ int xsys_cp(const char * new_name, const char * old_name)
 		r = SysDoCmd(cmd, path, errbuf, len);
 	}
 #endif
-	
+
 	return r;
 }
 
 int xsys_cp(const char * newpath, const char * oldpath, const char * filename)
 {
 	char newFileName[MAX_PATH], oldFileName[MAX_PATH];
-	
+
 	memset(newFileName, 0x0, sizeof(newFileName));
 	memset(oldFileName, 0x0, sizeof(oldFileName));
-	
+
 	if (newpath == NULL || newpath[0] == '\0'){
 		strcpy(newFileName, filename);
 	} else {
-		int l = strlen(newpath);		
+		int l = strlen(newpath);
 		if (newpath[l-1] == '\\' || newpath[l-1] == '/'){
 			sprintf(newFileName, "%s%s", newpath, filename);
 		} else {
 			sprintf(newFileName, "%s/%s", newpath, filename);
 		}
 	}
-	
+
 	if (oldpath == NULL || oldpath[0] == '\0'){
 		strcpy(oldFileName, filename);
 	} else {
-		int l = strlen(oldpath);		
+		int l = strlen(oldpath);
 		if (oldpath[l-1] == '\\' || oldpath[l-1] == '/'){
 			sprintf(oldFileName, "%s%s", oldpath, filename);
 		} else {
 			sprintf(oldFileName, "%s/%s", oldpath, filename);
 		}
 	}
-	
+
 	return xsys_cp(newFileName, oldFileName);
 }
 
 int xsys_mv(const char * newpath, const char * oldpath, const char * filename)
 {
 	char newFileName[MAX_PATH], oldFileName[MAX_PATH];
-	
+
 	memset(newFileName, 0x0, sizeof(newFileName));
 	memset(oldFileName, 0x0, sizeof(oldFileName));
-	
+
 	if (newpath == NULL || newpath[0] == '\0'){
 		strcpy(newFileName, filename);
 	} else {
-		int l = strlen(newpath);		
+		int l = strlen(newpath);
 		if (newpath[l-1] == '\\' || newpath[l-1] == '/'){
 			sprintf(newFileName, "%s%s", newpath, filename);
 		} else {
@@ -784,14 +853,14 @@ int xsys_mv(const char * newpath, const char * oldpath, const char * filename)
 	if (oldpath == NULL || oldpath[0] == '\0'){
 		strcpy(oldFileName, filename);
 	} else {
-		int l = strlen(oldpath);		
+		int l = strlen(oldpath);
 		if (oldpath[l-1] == '\\' || oldpath[l-1] == '/'){
 			sprintf(oldFileName, "%s%s", oldpath, filename);
 		} else {
 			sprintf(oldFileName, "%s/%s", oldpath, filename);
 		}
 	}
-	
+
 	if (newFileName[0] == '\0' || oldFileName[0] == '\0'){
 		return -1;
 	}
@@ -803,7 +872,7 @@ int xsys_mv(const char * newpath, const char * oldpath, const char * filename)
 	if (!xsys_md(newFileName, true)){
 		return -3;
 	}
-	
+
 	return SysMoveFile(oldFileName, newFileName);
 }
 
@@ -812,11 +881,11 @@ int xsys_rm(const char * path, const char * filename)
 	char szFileName[MAX_PATH];
 
 	memset(szFileName, 0x0, sizeof(szFileName));
-	
+
 	if (path == NULL || path[0] == '\0'){
 		strcpy(szFileName, filename);
 	} else {
-		int l = strlen(path);		
+		int l = strlen(path);
 		if (path[l-1] == '\\' || path[l-1] == '/'){
 			sprintf(szFileName, "%s%s", path, filename);
 		} else {
@@ -864,13 +933,13 @@ int xsnprintf(char * d, int l, const char * formatstring, ...)
 }
 
 const char * xlasterror(void)
-{  
-	return ErrGetErrorString();  
+{
+	return ErrGetErrorString();
 }
 
 const char * xgeterror_string(int ierror)
-{	
-	return ErrGetErrorString(ierror);  
+{
+	return ErrGetErrorString(ierror);
 }
 
 bool xsys_md(const char * pathname, bool isfile)
@@ -982,10 +1051,10 @@ long get_tick_count(void)
 #ifdef WIN32
 	return long(GetTickCount());
 #else
-    struct timespec ts;  
-  
-    clock_gettime(CLOCK_MONOTONIC, &ts);  
-  
-    return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);  
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 #endif
 }

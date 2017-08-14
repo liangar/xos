@@ -19,6 +19,8 @@ using namespace std;
 
 int		nsends, nrecvs;
 bool	bisBIN = false;
+bool	bisTCP = true;
+const char * g_phost = 0;
 
 xsys_socket g_sock;
 
@@ -82,12 +84,37 @@ int recv_data(void)
 	return l;
 }
 
+static int parse_args(int argc, char * argv[])
+{
+	for (int i = 1; i < argc; i++) {
+		if (argv[i][0] != '-' && argv[i][0] != '/'){
+			g_phost = argv[i];
+			continue;
+		}
+
+		if (argv[i][2] == 0)
+		{
+			switch (argv[i][1]) {
+			case 'b':  bisBIN = true;  break;
+			case 'U':  bisTCP = false; break;
+			}
+			continue;
+		}
+	}
+
+	return argc;
+}
+
+
 void main(int argc, char **argv)
 {
-    if (argc != 2 && argc != 3 || (argc == 3 && strcmp(argv[2], "BIN") != 0)){
-        printf("usage: xtelnet <host:port> [BIN]\n");
+    if (argc < 2){
+        printf("usage: xtelnet [-b] [-U] <host:port>\n");
         return;
     }
+
+	parse_args(argc, argv);
+
 	/*
 	{
 		float f = 123456.00;
@@ -128,14 +155,15 @@ void main(int argc, char **argv)
 	test_xsys_log(sendbuf);
 //*/
 
-	int r = g_sock.connect(argv[1]);
-	bisBIN = (argc == 3 && strcmp(argv[2], "BIN") == 0);
+	int r = g_sock.connect(g_phost, 0, 30, bisTCP);
 
 	printf("connect return: %d\n", r);
 
 	if (r >= 0){
 	xsys_thread h1;
 	h1.init(recv_show, 0);
+
+	xsys_sleep(1);
 
 //	r = recv_data();
 
@@ -146,6 +174,7 @@ void main(int argc, char **argv)
 
 		nsends = nrecvs = 0;
 		while (g_sock.isopen()){
+			// putchar('>');
             cin.getline(b, sizeof(b));
 
 			if (strcmp(b, "exit") == 0)
@@ -165,7 +194,7 @@ void main(int argc, char **argv)
                 break;
 			}
             nsends += r;
-			r = recv_data();
+//			r = recv_data();
 		}
 	}catch(...){
 		printf("some error occured.\n");
@@ -199,21 +228,31 @@ static unsigned int recv_show(void * pvoid)
 {
 	char aline[512];
 
+//	char old_ip[MAX_IP_LEN];
+//	char ip[MAX_IP_LEN];
+//	old_ip[0] = ip[0] = 0;
+
 	printf("recver: start.\n");
 
-	int l;
-	while ((l = g_sock.recv(aline, sizeof(aline), -1)) > 0){
+	int l = 1;
+	while (l > 0 || g_sock.isopen()){
+//		if (bisTCP){
+			l = g_sock.recv(aline, sizeof(aline), -1);
+//		}else
+//			l = g_sock.recv_from(aline, sizeof(aline), ip, -1);	// this is ok, but unnecessary.
+		if (l < 0)
+			continue;
+
         aline[l] = 0;
 		if (bisBIN){
 			write_buf_log("RECV", (unsigned char *)aline, l);
-		}else
-			puts(aline);
+		}else{
+			putchar('<');  puts(aline);
+		}
 
 		nrecvs += l;
 	}
 	xsys_sleep_ms(100);
-
-	g_sock.close();
 
 	printf("recv_show end(%d bytes).\n", nrecvs);
 	return 0;
