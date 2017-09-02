@@ -417,6 +417,18 @@ int xsys_socket::udp_listen(int nportnumber)
 
 int xsys_socket::accept(xsys_socket & client_sock, unsigned int timeout_ms)
 {
+	SYS_SOCKET s;
+	
+	int r = this->accept(s, timeout_ms);
+	client_sock.m_sock = s;
+
+	return r;
+}
+
+int xsys_socket::accept(SYS_SOCKET & sock, unsigned int timeout_ms)
+{
+	sock = SYS_INVALID_SOCKET;
+
 	if (m_sock == SYS_INVALID_SOCKET || !m_isserver) {
 		return -1;
 	}
@@ -426,14 +438,14 @@ int xsys_socket::accept(xsys_socket & client_sock, unsigned int timeout_ms)
 
 	ZeroData(ConnAddr);
 
-	if (timeout_ms == 0)
+	if (timeout_ms <= 0)
 		timeout_ms = SYS_INFINITE_TIMEOUT;
 
-	SYS_SOCKET sock = SysAccept(m_sock, &ConnAddr, timeout_ms);
+	sock = SysAccept(m_sock, &ConnAddr, timeout_ms);
 	if (sock == SYS_INVALID_SOCKET) {
 		return (ErrGetErrorCode());
 	}
-	client_sock.m_sock = sock;
+	
 	return 0;
 }
 
@@ -512,17 +524,17 @@ const char * xsys_socket::get_self_ip(char * ip)
 	return (const char *)SysInetRevNToA(addr, ip, 32);
 }
 
-int xsys_socket::recv(char * buf, int l, int timeout)
+int xsys_socket::recv(char * buf, int l, int timeout_ms)
 {
 	if (m_sock == SYS_INVALID_SOCKET) {
 		return -1;
 	}
 
-	if (timeout < 0){
-		timeout = SYS_INFINITE_TIMEOUT;
-	}else
-		timeout *= 1000;
-	return SysRecvData(m_sock, buf, l, timeout);
+	if (timeout_ms < 0){
+		timeout_ms = SYS_INFINITE_TIMEOUT;
+	}
+
+	return SysRecvData(m_sock, buf, l, timeout_ms);
 }
 
 
@@ -552,16 +564,16 @@ int xsys_socket::recv_from(char * buf, int len, SYS_INET_ADDR * pfrom_addr, int 
 	return SysRecvDataFrom(m_sock, pfrom_addr, buf, len, timeout);
 }
 
-int xsys_socket::send(const char * buf, int l, int timeout)
+int xsys_socket::send(const char * buf, int l, int timeout_ms)
 {
 	if (m_sock == SYS_INVALID_SOCKET) {
 		return -1;
 	}
-	if (timeout < 0){
-		timeout = SYS_INFINITE_TIMEOUT;
-	}else
-		timeout *= 1000;
-	return SysSendData(m_sock, buf, l, timeout);
+	if (timeout_ms < 0){
+		timeout_ms = SYS_INFINITE_TIMEOUT;
+	}
+
+	return SysSendData(m_sock, buf, l, timeout_ms);
 }
 
 int xsys_socket::sendto(const char * buf, int len, const SYS_INET_ADDR *pto_addr, int timeout_ms)

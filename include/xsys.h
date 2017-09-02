@@ -32,6 +32,8 @@
 #define min(a,b)	(((a) < (b)) ? (a) : (b))
 #endif
 
+#define XSYS_VALID_SOCK(x)	((x) != 0 && (x) != SYS_INVALID_SOCKET)
+
 int  xsys_init(bool bServerDebug = false);
 void xsys_down(void);
 
@@ -230,7 +232,8 @@ public:
 	int listen(int nportnumber, int iconnections = 1);
 	int udp_listen(int nportnumber);
 
-	/// 进入服务
+	/// 进入服务，接收连接，返回0为正确
+	int accept(SYS_SOCKET  & client_sock, unsigned int timeout_ms = 0);
 	int accept(xsys_socket & client_sock, unsigned int timeout_ms = 0);
 
 	/// 客户端连接

@@ -97,6 +97,7 @@ public:
 
 	int find_session_byid(int peerid);
 
+	int  notify_close_session(int i);
 	void session_close(int i);
 	bool session_isopen(int i);
 protected:
@@ -115,6 +116,8 @@ protected:
 	int			m_session_count;
 	xseq_buf	m_requests;			/// 保存提交数据(循环队列)
 	xseq_buf	m_sends;			/// 保存回复数据
+
+	xseq_buf	m_close_requests; 	/// 关闭通知
 
 protected:
 	int			m_listen_port;

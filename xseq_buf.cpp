@@ -237,10 +237,11 @@ int xseq_buf::get_free(long * id, char * pdata)
 {
 	xseq_buf_use use;
 
-	memset(&use, 0, sizeof(xseq_buf_use));
-	
-	if (m_psem->P(m_timeout_ms) != 0)
-		return -1;
+	ZeroData(use);
+
+	int r = m_psem->P(m_timeout_ms);
+	if (r != 0)
+		return r;
 	
 	m_hmutex->lock(1000);
 	

@@ -153,6 +153,7 @@
       <BrowseInformation Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</BrowseInformation>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="xsys_tcp_server2.cpp" />
     <ClCompile Include="xsys_udp_server.cpp" />
     <ClCompile Include="xtcp_client_dev.cpp" />
     <ClCompile Include="xwork_dbpool_server.cpp">
@@ -363,6 +364,7 @@
     <ClInclude Include="include\xsys.h" />
     <ClInclude Include="include\xsys_ftplib.h" />
     <ClInclude Include="include\xsys_oci.h" />
+    <ClInclude Include="include\xsys_tcp_server2.h" />
     <ClInclude Include="include\xsys_udp_server.h" />
     <ClInclude Include="include\xwork_dbserver.h" />
     <ClInclude Include="include\xwork_server.h" />

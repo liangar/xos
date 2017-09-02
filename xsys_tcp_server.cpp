@@ -1,5 +1,7 @@
 #include <xsys_tcp_server.h>
 
+#define PSESSION_ISOPEN(p)	((p) != 0 && XSYS_VALID_SOCK((p)->sock.m_sock))
+
 xsys_tcp_server::xsys_tcp_server()
 	: xwork_server("XTCP Server", 5, 2)
 	, m_listen_port(0)
@@ -30,7 +32,7 @@ bool xsys_tcp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 {
 	if (max_sessions > 1024)
 		max_sessions = 1024;
-	
+
 	m_requests.init((recv_len / 1024 + 1) * max_sessions, max_sessions);
 	m_listen_port = listen_port;
 	m_session_ttl = ttl;
@@ -44,7 +46,9 @@ bool xsys_tcp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 	m_psessions = new xtcp_session[max_sessions];
 	m_session_count = max_sessions;
 
-	m_sends.init(4096,max_sessions);
+	m_sends.init(4, max_sessions);
+	m_close_requests.init(4, max_sessions);
+
 	xtcp_session * p = m_psessions;
 	m_session_init_len = sizeof(xtcp_session) - ((char *)p->peerip - (char *)p);
 
@@ -74,7 +78,7 @@ void xsys_tcp_server::run(void)
 		recv_server();  return;
 	}
 
-	WriteToEventLog("%s : in.\n", szFunctionName);
+	WriteToEventLog("%s : in(sessions = %d).\n", szFunctionName, m_session_count);
 
 	int trytimes = 0;
 	int	session_i = 0;		/// 循环查找起始位置
@@ -89,9 +93,20 @@ void xsys_tcp_server::run(void)
 		struct timeval tv;
 
 		int i, conn_amount = 0, n;
-		while (m_isrun && m_listen_sock.isopen()) {
+		while (m_isrun && m_listen_sock.isopen() && trytimes < 3) {
 			// initialize file descriptor set
 	//		WriteToEventLog("%s: 1", szFunctionName);
+			// 检查关闭连接请求
+			while (!m_close_requests.isempty()){
+				i = -1;
+				n = m_close_requests.get_free((long *)&i, m_precv_buf);
+				if (n == 0){
+					WriteToEventLog("%s: get close %d request", szFunctionName, i);
+					session_close(i);
+				}
+				xsys_sleep_ms(10);
+			}
+
 			n = m_listen_sock.m_sock;
 			FD_ZERO(&fdsr);
 			FD_SET(m_listen_sock.m_sock, &fdsr);
@@ -114,14 +129,14 @@ void xsys_tcp_server::run(void)
 			WriteToEventLog("%s: 3 - %d", szFunctionName, ++n);
 
 			int ret = ::select(n, &fdsr, NULL, NULL, &tv);
-			
+
 			m_heartbeat = long(time(0));
-			
+
 	//		WriteToEventLog("%s: 4", szFunctionName);
 			if (ret < 0) {
-				WriteToEventLog("%s: select error(%d), loop end", szFunctionName, ret);
-				++trytimes;
-				break;
+				WriteToEventLog("%s: select error(%d), try times=%d", szFunctionName, ret, ++trytimes);
+				xsys_sleep_ms(100);
+				continue;
 			}
 
 			trytimes = 0;
@@ -130,6 +145,7 @@ void xsys_tcp_server::run(void)
 				break;
 
 			if (ret == 0) {
+				xsys_sleep_ms(100);
 				continue;
 			}
 
@@ -140,21 +156,27 @@ void xsys_tcp_server::run(void)
 					continue;
 
 				if (!FD_ISSET(m_psessions[i].sock.m_sock, &fdsr)){
-					if ((m_session_ttl < m_heartbeat - m_psessions[i].last_trans_time) ||
-						(20 < m_heartbeat - m_psessions[i].last_trans_time && m_psessions[i].last_trans_time == m_psessions[i].createTime))
+					if ((m_session_ttl < m_heartbeat - m_psessions[i].last_trans_time && m_psessions[i].last_trans_time > 0) ||
+						(20 < m_heartbeat - m_psessions[i].createTime && m_psessions[i].last_trans_time == 0))
 					{
-						WriteToEventLog("%s: client[%d] timeout[%d/20](%d - %d)", szFunctionName, i, m_session_ttl, int(m_psessions[i].createTime), m_heartbeat);
-						
+						WriteToEventLog("%s: client[%d] timeout[%d/20](%d/%d - %d)", szFunctionName, i, m_session_ttl, int(m_psessions[i].createTime), int(m_psessions[i].last_trans_time), m_heartbeat);
+
 						session_close(i);
 					}
 					continue;
 				}
 
-				ret = m_psessions[i].sock.recv(m_precv_buf, m_recv_len-1, 1);
+				ret = m_psessions[i].sock.recv(m_precv_buf, m_recv_len-1, 20);
 
-				if (ret <= 0) {        // client close
+				FD_CLR(m_psessions[i].sock.m_sock, &fdsr);
+				if (ret < 0) {        // client close
 					WriteToEventLog("%s: client[%d] close, recv return [%d]", szFunctionName, i, ret);
-					FD_CLR(m_psessions[i].sock.m_sock, &fdsr);
+					session_close(i);
+					continue;
+				}
+
+				if (ret == 0){
+					WriteToEventLog("%s: warning, client[%d] recv return [%d]", szFunctionName, i, ret);
 					session_close(i);
 					continue;
 				}
@@ -165,7 +187,7 @@ void xsys_tcp_server::run(void)
 				session_recv(i, ret);
 				m_psessions[i].recv_state = XTS_RECVING;
 				check_recv_state(i);
-		
+
 				switch (m_psessions[i].recv_state){
 				case XTS_RECVED:
 					WriteToEventLog("%s: %d - recved a packet data", szFunctionName, i);
@@ -217,7 +239,7 @@ void xsys_tcp_server::run(void)
 				}
 			}
 		}
-		close_all_session();
+		// close_all_session();
 		m_listen_sock.close();
 	}
 
@@ -248,7 +270,7 @@ void xsys_tcp_server::send_server(void)
 			r = m_psessions[i].sock.send_all(use.p, use.len);
 			if (r <= 0){
 				WriteToEventLog("%s: 发送错误(%d sock=%d)(return = %d)", szFunctionName, i, m_psessions[i].sock.m_sock, r);
-				session_close(i);
+				notify_close_session(i);
 			}else{
 				m_psessions[i].send_len = use.len;
 				m_psessions[i].sent_len = r;
@@ -264,7 +286,7 @@ void xsys_tcp_server::send_server(void)
 void xsys_tcp_server::recv_server(void)
 {
 	static const char szFunctionName[] = "xsys_tcp_server::recv_server";
-	
+
 	WriteToEventLog("%s : in.\n", szFunctionName);
 
 	int ret, i;
@@ -294,12 +316,12 @@ void xsys_tcp_server::recv_server(void)
 			session_close(i);
 			continue;
 		}
-		
+
 		// receive data
 		WriteToEventLog("%s: client[%d] send:%s\n", szFunctionName, i, m_precv_buf);
 		session_recv(i, ret);
 		check_recv_state(i);
-		
+
 		switch (m_psessions[i].recv_state){
 		case XTS_RECVED:
 			if (!on_recved(i) || (ret = session_recv_to_request(i)) >= 0)
@@ -347,6 +369,7 @@ bool xsys_tcp_server::stop(int secs)
 
 	m_requests.down();
 	m_sends.down();
+	m_close_requests.down();
 
 	WriteToEventLog("%s: out(%d)", szFunctionName, isok);
 
@@ -379,17 +402,29 @@ void xsys_tcp_server::session_open(int i)
 	memset(psession->peerip, 0, m_session_init_len);
 
 	psession->createTime = time(0);
-	psession->last_trans_time = long(psession->createTime);
+	psession->last_trans_time = 0;
 	psession->sock.get_peer_ip(psession->peerip);
 	psession->sock.get_self_ip(psession->servip);
 	psession->peerid = -1;
+}
+
+int xsys_tcp_server::notify_close_session(int i)
+{
+	int r = m_close_requests.put(i, (char *)&i, 0);
+
+	WriteToEventLog("notify_close_session: %d(r = %d)", i, r);
+
+	if ((i % 4) == 0)
+		xsys_sleep_ms(50);
+
+	return r;
 }
 
 void xsys_tcp_server::session_close(xtcp_session * psession)
 {
 	static const char szFunctionName[] = "xsys_tcp_server::session_close";
 
-	m_lock.lock(3000);
+	m_lock.lock(3);
 	if (psession->sock.isopen())
 		psession->sock.close();
 
@@ -435,7 +470,7 @@ void xsys_tcp_server::session_close(int i)
 		return;
 	}
 
-	m_lock.lock(3000);
+	m_lock.lock(3);
 	psession->recv_state = XTS_SESSION_END;
 	psession->send_state = XTS_SESSION_END;
 	m_lock.unlock();
@@ -475,7 +510,7 @@ int xsys_tcp_server::session_recv_to_request(int i)
 	xtcp_session * psession = m_psessions + i;
 
 	int r = m_requests.put(i, psession->precv_buf, psession->recv_len);
-	xsys_sleep_ms(3);
+	xsys_sleep_ms(100);
 	WriteToEventLog("session_recv_to_request: %d - send packet to recver", i);
 	return r;
 }

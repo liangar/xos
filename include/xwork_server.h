@@ -84,7 +84,7 @@ public:
 
     // 事件命令通知
 	xsys_event	m_hnotify;		/// 通知的事件
-	char		m_cmd[16];		/// 通知命令: stop,自定义命令
+	char		m_cmd[32];		/// 通知命令: stop,自定义命令
 	char		m_parms[256];	/// 通知命令的参数
 
 	char		m_lastmsg[256];	/// 最近消息

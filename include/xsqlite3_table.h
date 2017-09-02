@@ -87,12 +87,14 @@ int xsqlite3_table<T>::get_list(xlist<T> & items, int maxitems)
 template<class T>
 int xsqlite3_table<T>::commit(void)
 {
+	endexec();
 	return m_pdb->trans_end(XSQL_COMMIT);
 }
 
 template<class T>
 int xsqlite3_table<T>::rollback(void)
 {
+	endexec();
 	return m_pdb->trans_end(XSQL_ROLLBACK);
 }
 

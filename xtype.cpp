@@ -124,6 +124,14 @@ void x_long2nt(unsigned char * d, long v)
 	d[3] = (unsigned char)(v & 0xff);
 }
 
+void x_long2ntv(unsigned char * d, long v)
+{
+	d[3] = (unsigned char)(v & 0xff);  v >>= 8;
+	d[2] = (unsigned char)(v & 0xff);  v >>= 8;
+	d[1] = (unsigned char)(v & 0xff);  v >>= 8;
+	d[0] = (unsigned char)(v & 0xff);
+}
+
 void x_long2nt3(unsigned char * d, long v)
 {
 	d[0] = (unsigned char)(v & 0xff);  v >>= 8;
@@ -131,10 +139,11 @@ void x_long2nt3(unsigned char * d, long v)
 	d[2] = (unsigned char)(v & 0xff);
 }
 
-void x_long2ntv(unsigned char * d, long v)
+void x_long2nt3v(unsigned char * d, long v)
 {
-	x_long2nt(d, v);
-	invert_bytes((char*)d, 4);
+	d[2] = (unsigned char)(v & 0xff);  v >>= 8;
+	d[1] = (unsigned char)(v & 0xff);  v >>= 8;
+	d[0] = (unsigned char)(v & 0xff);
 }
 
 void x_short2nt(unsigned char * d, unsigned short v)
@@ -154,7 +163,7 @@ unsigned short x_nt2short(unsigned char * d)
 	unsigned short v = (unsigned short)d[1];
 	v <<= 8;
 	v |= (unsigned short)d[0];
-	
+
 	return v;
 }
 
@@ -163,7 +172,7 @@ unsigned short x_nt2shortv(unsigned char * d)
 	unsigned short v = (unsigned short)d[0];
 	v <<= 8;
 	v |= (unsigned short)d[1];
-	
+
 	return v;
 }
 
@@ -173,7 +182,7 @@ long x_nt2long(unsigned char * d)
 	v |= d[2];  v <<= 8;
 	v |= d[1];  v <<= 8;
 	v |= d[0];
-	
+
 	return v;
 }
 
@@ -183,7 +192,7 @@ long x_nt2longv(unsigned char * d)
 	v |= d[1];  v <<= 8;
 	v |= d[2];  v <<= 8;
 	v |= d[3];
-	
+
 	return v;
 }
 
@@ -192,7 +201,7 @@ long x_nt2long3(unsigned char * d)
 	long v = d[2];  v <<= 8;
 	v |= d[1];  v <<= 8;
 	v |= d[0];
-	
+
 	return v;
 }
 
@@ -201,7 +210,7 @@ long x_nt2long3v(unsigned char * d)
 	long v = d[0];  v <<= 8;
 	v |= d[1];  v <<= 8;
 	v |= d[2];
-	
+
 	return v;
 }
 
@@ -212,6 +221,16 @@ void x_long2nt(unsigned char * d, long v, int bytes)
 		case 2: x_short2nt(d, v);  break;
 		case 1: d[0] = (unsigned char)v;  break;
 		default: x_long2nt(d, v);  break;
+	}
+}
+
+void x_long2ntv(unsigned char * d, long v, int bytes)
+{
+	switch(bytes){
+		case 3: x_long2nt3v(d, v); break;
+		case 2: x_short2ntv(d, v);  break;
+		case 1: d[0] = (unsigned char)v;  break;
+		default: x_long2ntv(d, v);  break;
 	}
 }
 
@@ -325,6 +344,25 @@ int x_array2hex(char * d, const unsigned char * s, int len)
 	return len;
 }
 
+int x_hex2bcd(unsigned char *d, const unsigned char * s, int len)
+{
+	int i;
+	for (i = 0; i < len; i++){
+		int n = *s++;
+		*d++ = ((n / 10) << 4) | (n % 10);
+	}
+	return len;
+}
+
+int x_bcd2hex(unsigned char *d, const unsigned char * s, int len)
+{
+	int i;
+	for (i = 0; i < len; i++){
+		*d++ = (*s & 0x0F) + (*s++ >> 4) * 10;
+	}
+	return len;
+}
+
 void invert_bytes(char * d, int l)
 {
 	--l;
@@ -384,6 +422,6 @@ int hamming_weight_4(unsigned int n)
     n = (n&0x0f0f0f0f) + ((n>>4)&0x0f0f0f0f);
     n = (n&0x00ff00ff) + ((n>>8)&0x00ff00ff);
     n = (n&0x0000ffff) + ((n>>16)&0x0000ffff);
-    
+
     return int(n);
 }
