@@ -40,8 +40,8 @@ bool xsys_tcp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 	m_recv_len = recv_len;
 	if (m_recv_len < 1024)
 		m_recv_len = 1024;
-	m_precv_buf = (char *)malloc(m_recv_len+1);
-	memset(m_precv_buf,0,m_recv_len);
+
+	m_precv_buf = (char *)calloc(m_recv_len+1, 1);
 
 	m_psessions = new xtcp_session[max_sessions];
 	m_session_count = max_sessions;
@@ -128,7 +128,7 @@ void xsys_tcp_server::run(void)
 			}
 			WriteToEventLog("%s: 3 - %d", szFunctionName, ++n);
 
-			int ret = ::select(n, &fdsr, NULL, NULL, &tv);
+			int ret = ::select(n+1, &fdsr, NULL, NULL, &tv);
 
 			m_heartbeat = long(time(0));
 

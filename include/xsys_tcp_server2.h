@@ -25,9 +25,9 @@ typedef enum {
 struct xtcp2_session{
 	SYS_SOCKET	sock;	/// 通讯地址
 
+	int		peerid;			/// 连接对方的 id 标识, 给应用使用
 	time_t	createTime;		/// 建立连接的时间
 	long	last_trans_time;/// 最近通讯时间
-	int		peerid;			/// 连接对方的 id 标识, 给应用使用
 
 	/// recv
 	XTS_STATES	recv_state;	/// 接收状态
@@ -103,9 +103,10 @@ protected:
 	void session_close(xtcp2_session * psession);
 	// 关闭已用标记的第i_used个会话，返回实际的序号
 	int  session_close_used(int i_used);
-
+	int  session_close_used_by_i(int i_session);
+	
 	void session_recv_reset(int i);
-	int session_recv_to_queue(int i);
+	int session_recv_to_queue(int i, int len);
 	int session_recv(int i, int len);
 
 	void close_all_session(void);
@@ -126,9 +127,8 @@ protected:
 	xsys_socket m_listen_sock;	
 	int 		m_session_ttl;	/// 超时时间(秒)
 	int			m_recv_len;		/// 每次接收的最大长度
+	int 		m_send_len; 	/// 每次发送最大值
 	char *		m_precv_buf;	/// 接收缓冲
-
-	xsys_mutex	m_lock;
 
 	xsys_thread m_send_thread;	/// 发送服务线程
 	xsys_thread m_msg_thread;	/// 消息处理服务线程

@@ -105,6 +105,7 @@ static int parse_args(int argc, char * argv[])
 	return argc;
 }
 
+static bool is_run = false;
 
 void main(int argc, char **argv)
 {
@@ -114,6 +115,9 @@ void main(int argc, char **argv)
     }
 
 	parse_args(argc, argv);
+
+	if (bisBIN)
+		printf("in binary mode\n");
 
 	/*
 	{
@@ -163,7 +167,7 @@ void main(int argc, char **argv)
 	xsys_thread h1;
 	h1.init(recv_show, 0);
 
-	xsys_sleep(1);
+	xsys_sleep_ms(10);
 
 //	r = recv_data();
 
@@ -173,7 +177,7 @@ void main(int argc, char **argv)
 		printf("self ip: %s\n", g_sock.get_self_ip(b));
 
 		nsends = nrecvs = 0;
-		while (g_sock.isopen()){
+		while (is_run && g_sock.isopen()){
 			// putchar('>');
             cin.getline(b, sizeof(b));
 
@@ -232,6 +236,8 @@ static unsigned int recv_show(void * pvoid)
 //	char ip[MAX_IP_LEN];
 //	old_ip[0] = ip[0] = 0;
 
+	is_run = true;
+
 	printf("recver: start.\n");
 
 	int l = 1;
@@ -240,8 +246,8 @@ static unsigned int recv_show(void * pvoid)
 			l = g_sock.recv(aline, sizeof(aline), -1);
 //		}else
 //			l = g_sock.recv_from(aline, sizeof(aline), ip, -1);	// this is ok, but unnecessary.
-		if (l < 0)
-			continue;
+		if (l <= 0)
+			break;
 
         aline[l] = 0;
 		if (bisBIN){
@@ -255,5 +261,8 @@ static unsigned int recv_show(void * pvoid)
 	xsys_sleep_ms(100);
 
 	printf("recv_show end(%d bytes).\n", nrecvs);
+
+	is_run = false;
+
 	return 0;
 }

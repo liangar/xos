@@ -19,8 +19,8 @@ xseq_buf::~xseq_buf()
 
 int xseq_buf::init(int bufsize, int uses)
 {
-	if (bufsize < 32)
-		bufsize = 32;
+	if (bufsize < 4)
+		bufsize = 4;
 	bufsize *= 1024;
 
 	m_pbuf = (char *)malloc(bufsize);
