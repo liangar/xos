@@ -707,7 +707,7 @@ int xsys_socket::send_all(const char * buf)
 	return send_all(buf, strlen(buf), 20);
 }
 
-int xsys_socket::recvblob(char * buf, int timeout)
+int xsys_socket::recvblob(char * buf, int * prest_len, int max_len, int timeout)
 {
 	if (timeout < 0){
 		timeout = SYS_INFINITE_TIMEOUT;
@@ -721,15 +721,19 @@ int xsys_socket::recvblob(char * buf, int timeout)
 
 	if (recv_all(n, 10, timeout) == 10){
 		n[10] = '\0';  int l = atoi(n);
-		if (recv_all(buf, l, timeout) == l){
-			buf[l] = '\0';
-			return l;
+		int  len = min(l, max_len-1);
+		if (recv_all(buf, len, timeout) == len){
+			buf[len] = '\0';
+			if (prest_len)
+				*prest_len = l - len;
+
+			return len;
 		}
 	}
 	return -1;
 }
 
-int xsys_socket::recvblob(char **buf, int timeout)
+int xsys_socket::recvblob(char **buf, int * prest_len, int max_len, int timeout)
 {
 	if (timeout < 0){
 		timeout = SYS_INFINITE_TIMEOUT;
@@ -742,13 +746,20 @@ int xsys_socket::recvblob(char **buf, int timeout)
 	char n[11];
 	n[10] = '\0';
 	if (recv_all(n, 10, timeout) != 10)  return -1;
+
 	int l = atoi(n);
 	if (l < 0)  return -2;
-	if ((*buf = new char[l+1]) == NULL)  return -3;
-	if (recv_all(*buf, l, timeout) == l){
-		(*buf)[l] = '\0';
+
+	int len = min(l, max_len-1);
+	if ((*buf = new char[len+1]) == NULL)  return -3;
+
+	if (recv_all(*buf, len, timeout) == l){
+		(*buf)[len] = '\0';
+		if (prest_len)
+			*prest_len = l - len;
 		return l;
 	}
+
 	return -4;
 }
 

@@ -306,8 +306,8 @@ public:
 
 	/// 已内部协议块发送接收
 	/// 块的结构:<%010d 长度><数据块>
-	int recvblob(char * buf, int timeout = SYS_INFINITE_TIMEOUT);
-	int recvblob(char **buf, int timeout = SYS_INFINITE_TIMEOUT);
+	int recvblob(char * buf, int * prest_len = 0, int max_len = 64*1024, int timeout = SYS_INFINITE_TIMEOUT);
+	int recvblob(char **buf, int * prest_len = 0, int max_len = 64*1024, int timeout = SYS_INFINITE_TIMEOUT);
 	int sendblob(const char * buf, int len = 0, int timeout = 30);
 
 	int m_isserver;		/*!< 是否是服务句柄 */
