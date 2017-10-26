@@ -13,6 +13,7 @@ int xsys_init(bool bDebug)
 void xsys_down(void)
 {
 	xsys_shutdown();
+	xsys_sleep_ms(100);
 	xsys_cleanup();
 }
 
@@ -922,11 +923,15 @@ int xsys_rm(const char * path, const char * filename)
 	return 	SysRemove(szFileName);
 }
 
-void xsys_clear_path(const char * path)
+void xsys_clear_path(const char * path, const char * prefix)
 {
 	char fullname[MAX_PATH];
 	xsys_ls ls;
 	char filename[MAX_PATH];
+
+	int len = 0;
+	if (prefix)
+		len = strlen(prefix);
 
 	for (bool hasFile = ls.open(path, filename);
 		hasFile;
@@ -937,6 +942,9 @@ void xsys_clear_path(const char * path)
 			strcmp(filename, "..")== 0){
 			continue;
 		}
+		if (len > 0 && strncmp(prefix, filename, len) != 0)
+			continue;
+
 		sprintf(fullname, "%s/%s", path, filename);
 		if (ls.ispath()){
 			xsys_rm_path(fullname);

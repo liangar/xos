@@ -6,6 +6,8 @@
 
 #include <xsys_log.h>
 
+static bool s_pause_flag = false;
+
 xsys_log::xsys_log()
 	: m_hlogfile(NULL)
 	, m_bdebug(false)
@@ -52,6 +54,12 @@ bool xsys_log::open(const char * file_name)
 
 bool xsys_log::reopen(void)
 {
+	bool old_flag = s_pause_flag;
+
+	s_pause_flag = true;
+
+	xsys_sleep_ms(500);
+
 	int r = close();
 	
 	r = bak();
@@ -62,20 +70,28 @@ bool xsys_log::reopen(void)
 	}
 	m_hlogfile = hlogfile;
 	
+	s_pause_flag = old_flag;
+	
 	return (hlogfile != NULL);
 }
 
 int xsys_log::close(void)
 {
     if (m_hlogfile != NULL){
+		bool old_flag = s_pause_flag;
+		s_pause_flag = true;
+		xsys_sleep_ms(100);
+
         fclose(m_hlogfile);  m_hlogfile = NULL;
+		
+		s_pause_flag = old_flag;
     }
 	return 0;
 }
 
 int xsys_log::flush(void)
 {
-	if (m_hlogfile)
+	if (!s_pause_flag && m_hlogfile)
 		return fflush(m_hlogfile);
 	
 	return 0;
@@ -93,7 +109,7 @@ int xsys_log::write(const char * s)
 //		xsys_sleep_ms(200);
 
 	int r = 0;
-	if (m_hlogfile){
+	if (!s_pause_flag && m_hlogfile){
 		r = fputs(s, m_hlogfile);
 		if (r < 0){
 			xsys_sleep_ms(300);

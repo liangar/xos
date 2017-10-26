@@ -349,7 +349,7 @@ int xsys_cp(const char * new_name, const char * old_name);
 int xsys_cp(const char * newpath, const char * oldpath, const char * filename);
 int xsys_mv(const char * newpath, const char * oldpath, const char * filename);
 int xsys_rm(const char * path, const char * filename);
-void xsys_clear_path(const char * path);
+void xsys_clear_path(const char * path, const char * prefix = NULL);
 
 int xsnprintf(char * d, int l, const char * formatstring, ...);
 
