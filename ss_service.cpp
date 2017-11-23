@@ -320,8 +320,8 @@ long string2time(const char * s, bool bendflag)
 	p = getaword(tmp, s, '-');
 	ltime.tm_year = atoi(tmp) - 1900;
 	
-	p = getaword(tmp, p, '-') - 1;
-	ltime.tm_mon = atoi(tmp);
+	p = getaword(tmp, p, '-');
+	ltime.tm_mon = atoi(tmp)-1;
 	
 	p = getaword(tmp, p, ' ');
 	ltime.tm_mday = atoi(tmp);

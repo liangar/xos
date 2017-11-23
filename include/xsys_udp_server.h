@@ -51,9 +51,12 @@ public:
 	void run(void);			/// 接收处理线程
 	void send_server(void);	/// 发送处理线程
 	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
+	
+	void notify_do_cmd(void)  {  m_has_new_cmd = true;  }
 
 	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
-	virtual int  do_msg(int i, char * msg, int msg_len) = 0;
+	virtual int  do_msg(int i, char * msg, int msg_len) = 0;	/// 处理消息
+	virtual int  do_cmd(void) = 0;	/// 主动命令执行
 	
 	virtual bool on_sent	(int i, int len) = 0;	/// 发送完成
 	virtual bool on_closed  (int i) = 0;
@@ -75,7 +78,7 @@ public:
 
 	void session_close(int i);
 	bool session_isopen(int i);
-	int notify_close_session(int i);
+	int notify_close_session(int i, bool need_shift = true);
 	
 protected:
 	void timeout_check(void);
@@ -102,6 +105,8 @@ protected:
 	xseq_buf	m_recv_queue;	/// 保存提交数据(循环队列)
 	xseq_buf	m_send_queue;	/// 保存发送数据
 	xseq_buf	m_close_requests; 	/// 关闭通知
+	
+	bool		m_has_new_cmd;	/// 有新消息
 
 protected:
 	int			m_listen_port;	/// 端口

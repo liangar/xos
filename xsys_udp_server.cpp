@@ -26,6 +26,7 @@ xsys_udp_server::xsys_udp_server(const char * name, int nmaxexception)
 	m_pused_index = NULL;
 	m_used_count = 0;
 	m_serverURL[0] = 0;
+	m_has_new_cmd = false;
 }
 
 static int calc_addr_crc(SYS_INET_ADDR * addr)
@@ -50,9 +51,10 @@ int xsys_udp_server::session_close_used(int i_used)
 	WriteToEventLog("Close i_used=%d, i = %d", i_used, i);
 	session_close(i);
 
-	memmove(m_pused_index + i_used, m_pused_index+i_used+1, m_used_count-i_used-1);
 	--m_used_count;
-	
+	if (m_used_count > i_used)	// 正常不可能，用于防护以外
+		memmove(m_pused_index + i_used, m_pused_index+i_used+1, m_used_count-i_used);
+
 	return i;
 }
 
@@ -69,7 +71,7 @@ int xsys_udp_server::session_close_used_by_i(int i_session)
 		return session_close_used(i);
 
 	WriteToEventLog("使用队列中没找到，直接关闭<%d>", i_session);
-	
+
 	session_close(i_session);
 
 	return i_session;
@@ -107,20 +109,11 @@ int xsys_udp_server::opened_find(int * crc, SYS_INET_ADDR * addr)
 	for (i = m_used_count-1; i >= 0; i--){
 		int j = m_pused_index[i];
 		// 用CRC和addr进行比较查找
-		if (addr && m_psessions[j].addr_crc == *crc &&
+		if (addr && crc && m_psessions[j].addr_crc == *crc &&
 			memcmp(&m_psessions[j].addr, addr, sizeof(SYS_INET_ADDR)) == 0)
 		{
 			n = j;
 			continue;
-		}
-
-		if ((m_session_ttl < m_heartbeat - m_psessions[j].last_trans_time) ||
-			(20 < m_heartbeat - m_psessions[j].last_trans_time && m_psessions[j].last_trans_time == m_psessions[j].createTime))
-		{
-			WriteToEventLog("%s: client[%d] timeout[%d/20](%d - %d)", szFunctionName, j, m_session_ttl, int(m_psessions[j].createTime), m_heartbeat);
-			session_close(j);
-			memmove(m_psessions+i, m_psessions+i+1, m_used_count-i);
-			--m_used_count;
 		}
 	}
 
@@ -199,6 +192,8 @@ void xsys_udp_server::run(void)
 		return;
 	}
 
+	notify_do_cmd();
+
 	WriteToEventLog("%s: %s\n", szFunctionName, m_listen_sock.get_self_ip(m_lastmsg));
 
 	// 启动发送线程
@@ -213,6 +208,16 @@ void xsys_udp_server::run(void)
 	int conn_amount = 0, n, idle_times = 0;
 	while (m_isrun && m_listen_sock.isopen()) {
 
+		while (!m_close_requests.isempty()){
+			int i = -1;
+			int n = m_close_requests.get_free((long *)&i, m_precv_buf);
+			if (n == 0){
+				WriteToEventLog("%s: get close %d request", szFunctionName, i);
+				session_close_used_by_i(i);
+			}
+			xsys_sleep_ms(10);
+		}
+
 		m_heartbeat = long(time(0));
 
 		int crc;
@@ -223,10 +228,16 @@ void xsys_udp_server::run(void)
 
 		if (len == ERR_TIMEOUT || len == 0){
 			++idle_times;
-			
+
 			if (idle_times >= 30){
+				idle_times = 0;
 				timeout_check();	// 只是检查timeout，关闭过期连接
 			}
+
+			if (m_has_new_cmd){
+				m_recv_queue.put(-1, "cmds", 4);
+			}
+
 			continue;
 		}
 
@@ -250,7 +261,10 @@ void xsys_udp_server::run(void)
 					i = session_close_used(0);
 				}else{
 					// 从最后的开始找
-					for (i = m_pused_index[m_used_count-1]+1, n = 0; n < m_session_count; n++){
+					i = m_pused_index[m_used_count-1] + 1;
+					if (i == m_session_count)
+						i = 0;
+					for (n = 0; n < m_session_count; n++){
 						if (!session_isopen(i))
 							break;
 						++i;
@@ -273,7 +287,7 @@ void xsys_udp_server::run(void)
 		WriteToEventLog("%s: client[%d, len=%d]", szFunctionName, i, len);
 		session_recv(i, len);	// 将数据存入session的临时缓存
 		m_psessions[i].recv_state = XTS_RECVING;
-		
+
 		// 检查接收状态
 		// 返回首个完整包的应有长度，0 < 为非协议包
 		int r = calc_msg_len(i);
@@ -287,7 +301,7 @@ void xsys_udp_server::run(void)
 			else
 				m_psessions[i].recv_state = XTS_RECVING;
 		}
-	
+
 		switch (m_psessions[i].recv_state){
 		case XTS_RECVED:
 			WriteToEventLog("%s: %d - recved a packet data", szFunctionName, i);
@@ -317,10 +331,10 @@ void xsys_udp_server::run(void)
 
 void xsys_udp_server::msg_server(void)
 {
-	static const char szFunctionName[] = "xsys_udp_server::send_server";
+	static const char szFunctionName[] = "xsys_udp_server::msg_server";
 
 	WriteToEventLog("%s : in", szFunctionName);
-	
+
 	char * ptemp_buf = (char *)calloc(1, m_recv_len+1);
 
 	int idle = 120 * 1000;
@@ -330,30 +344,37 @@ void xsys_udp_server::msg_server(void)
 
 		m_recv_queue.set_timeout_ms(idle);
 
+		int r;
+
 		/// 取出数据
 		int len = m_recv_queue.get_free((long *)(&isession), ptemp_buf);
 
-		if (len != ERR_TIMEOUT){
-			if (len <= 0){
-				WriteToEventLog("%s : len = %d, no data", szFunctionName, len);
-				continue;
-			}
+		try{
+			if (len != ERR_TIMEOUT){
+				if (len <= 0){
+					WriteToEventLog("%s : len = %d, no data", szFunctionName, len);
+					continue;
+				}
 
-			if (isession < 0 || isession >= m_session_count){
-				WriteToEventLog("%s: <%d>, len = %d, 超出会话界限,忽略", szFunctionName, isession, len);
-				continue;
+				if (isession < 0 || isession >= m_session_count){
+					// 系统通知执行，或者出错
+					if (isession == -1 && len == 4 && strcmp(ptemp_buf, "cmds") == 0){
+						WriteToEventLog("%s: do_cmd -> %d", szFunctionName, isession);
+						r = do_cmd();
+					}else
+						WriteToEventLog("%s: <%d>, len = %d, 超出会话界限,忽略", szFunctionName, isession, len);
+					continue;
+				}
+
+				/// 调用处理函数进行消息处理
+				r = do_msg(isession, ptemp_buf, len);
+
+				WriteToEventLog("%s: <%d>处理%d长的数据，返回%d", szFunctionName, isession, len, r);
 			}
+		}catch(...){
+			WriteToEventLog("%s: 出现执行异常", szFunctionName);
 		}
 
-		int r;
-		
-		if (len != ERR_TIMEOUT){
-			/// 调用处理函数进行消息处理
-			r = do_msg(isession, ptemp_buf, len);
-
-			WriteToEventLog("%s : <%d>处理%d长的数据，返回%d", szFunctionName, isession, len, r);
-		}
-		
 		/// 检查所有超时的session，并调用处理方法
 		int i;
 		int lnow = time(0);
@@ -369,7 +390,7 @@ void xsys_udp_server::msg_server(void)
 	}
 
 	::free(ptemp_buf);
-	
+
 	WriteToEventLog("%s : out", szFunctionName);
 }
 
@@ -400,11 +421,12 @@ void xsys_udp_server::send_server(void)
 			continue;
 		}
 
+		write_buf_log(szFunctionName, (unsigned char *)ptemp_buf, len);
+
 		// find session
 		int i = i_session;
 		if (i < 0 || i > m_session_count || !PUDPSESSION_ISOPEN(m_psessions+i)){
 			WriteToEventLog("%s: 出错,试图在未打开的会话上发送(%d)", szFunctionName, i);
-			write_buf_log(szFunctionName, (unsigned char *)ptemp_buf, len);
 		}else{
 			int r = m_listen_sock.sendto(ptemp_buf, len, &m_psessions[i].addr, 1000);
 			if (r <= 0){
@@ -519,13 +541,13 @@ void xsys_udp_server::session_close(xudp_session * psession)
 	psession->peerid = -1;
 }
 
-int xsys_udp_server::notify_close_session(int i)
+int xsys_udp_server::notify_close_session(int i, bool need_shift)
 {
 	int r = m_close_requests.put(i, (char *)&i, 0);
 
 	WriteToEventLog("notify_close_session: %d(r = %d)", i, r);
 
-	if ((i % 4) == 0)
+	if (need_shift && (i % 4) == 0)
 		xsys_sleep_ms(50);
 
 	return r;
@@ -626,7 +648,7 @@ void xsys_udp_server::set_idle(int isession, int idle_secs)
 {
 	if (!PUDPSESSION_ISOPEN(m_psessions+isession))
 		return;
-	
+
 	m_psessions[isession].last_trans_time = long(time(0));
 	m_psessions[isession].idle_secs = idle_secs;
 }
