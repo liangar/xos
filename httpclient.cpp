@@ -23,7 +23,7 @@
 #endif
 #define CONN_RETRIES 3
 #define HTTP_GET_HEADER "%s %s HTTP/1.%d\r\nAccept: */*\r\nConnection: %s\r\nUser-Agent: Mozilla/5.0\r\nHost: %s\r\n%s\r\n"
-#define HTTP_POST_HEADER "POST %s HTTP/1.1\r\nHost: %s\r\nContent-Type: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: %d\r\n%s\r\n"
+#define HTTP_POST_HEADER "POST %s HTTP/1.1\r\nHost: %s\r\nAccept: text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\nAccept-Language: en-us,en;q=0.5\r\nAccept-Encoding: gzip,deflate\r\nContent-Type: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: %d\r\n%s\r\n"
 #define HTTP_POST_MULTIPART_HEADER "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nAccept: text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\nAccept-Language: en-us,en;q=0.5\r\nAccept-Encoding: gzip,deflate\r\nAccept-Charset: ISO-8859-1;q=0.7,*;q=0.7\r\nKeep-Alive: 300\r\nConnection: keep-alive\r\nContent-Type: multipart/form-data; boundary=%s\r\nContent-Length: %d\r\n%s\r\n"
 #define MULTIPART_BOUNDARY "---------------------------24464570528145"
 #define HTTP_POST_STREAM_HEADER "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nAccept: text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\nAccept-Language: en-us,en;q=0.5\r\nAccept-Encoding: gzip,deflate\r\nAccept-Charset: ISO-8859-1;q=0.7,*;q=0.7\r\nKeep-Alive: 300\r\nConnection: close\r\nContent-Type: application/octet-stream; filename=%s\r\nContent-Length: %d\r\n%s\r\n"
@@ -126,6 +126,12 @@ int httpRequest(HTTP_REQUEST* param)
 		if (!path) return -1;
 	}
 
+	char HostName[128];
+	if (param->port == 80){
+		strcpy(HostName, param->hostname);
+	}else
+		sprintf(HostName, "%s:%d", param->hostname, param->port);
+
 	if (param->header) free(param->header);
 	param->header = (char*)malloc(MAX_HEADER_SIZE + 1);
 	if ((param->bytesStart|param->bytesEnd) == 0) {
@@ -134,31 +140,32 @@ int httpRequest(HTTP_REQUEST* param)
 		if (param->referer) {
 			xsnprintf(headerAddition, sizeof(headerAddition), "Referer: %s\r\n", param->referer);
 		}
+
 		switch (param->method) {
 		case HM_GET:
 			xsnprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, "GET",
 				path, param->httpVer,
 				(param->flags & FLAG_KEEP_ALIVE) ? "Keep-Alive" : "close",
-				param->hostname, headerAddition
+				HostName, headerAddition
 			);
 			break;
 		case HM_HEAD:
 			xsnprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, "HEAD",
 				path, param->httpVer,
 				(param->flags & FLAG_KEEP_ALIVE) ? "Keep-Alive" : "close",
-				param->hostname, headerAddition
+				HostName, headerAddition
 			);
 			break;
 		case HM_POST:
 			xsnprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_HEADER,
-				path, param->hostname,
+				path, HostName,
 				(param->contentType)? param->contentType : http_post_contentType,
 				param->postPayloadBytes, headerAddition
 			);
 			break;
 		case HM_POST_STREAM: {
 			xsnprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_STREAM_HEADER,
-				path, param->hostname,
+				path, HostName,
 				param->filename, 0, headerAddition
 			);
 			break;
@@ -174,7 +181,7 @@ int httpRequest(HTTP_REQUEST* param)
 				bytes += sizeof(MULTIPART_BOUNDARY) - 1 + 6;
 			}
 			bytes += sizeof(MULTIPART_BOUNDARY) - 1 + 6;
-			xsnprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_MULTIPART_HEADER, path, param->hostname, MULTIPART_BOUNDARY, bytes, headerAddition);
+			xsnprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_MULTIPART_HEADER, path, HostName, MULTIPART_BOUNDARY, bytes, headerAddition);
 			} break;
 		}
 	} else {
@@ -185,7 +192,7 @@ int httpRequest(HTTP_REQUEST* param)
 		} else {
 			strcpy(p,"\r\n");
 		}
-		xsnprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, path, "close", param->hostname, tokenRange);
+		xsnprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, path, "close", HostName, tokenRange);
 	}
 	
 	do {

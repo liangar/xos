@@ -451,7 +451,7 @@ int SysRecvData(SYS_SOCKET SockFD, char *pszBuffer, int iBufferSize, int iTimeou
 		DWORD dwWaitResult = WSAWaitForMultipleEvents(2, hWaitEvents, FALSE,
 							      iTimeout, TRUE);
 
-		WSAEventSelect(SockFD, hReadEvent, 0);
+		WSAEventSelect(SockFD, NULL, 0);
 
 		if (dwWaitResult == (WSA_WAIT_EVENT_0 + 1)) {
 			CloseHandle(hReadEvent);
@@ -2033,4 +2033,35 @@ int SysDoCmd(const char * pszCmmand, const char * workpath, char * outbuf, int l
 	}
 
 	return r;
+}
+
+char const *SysGetLastError(void)
+{
+
+	char *pszMessage = NULL;
+	DWORD dwError = GetLastError();
+	DWORD dwRet =
+	    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+			  FORMAT_MESSAGE_ARGUMENT_ARRAY,
+			  NULL,
+			  dwError,
+			  LANG_NEUTRAL,
+			  (LPTSTR) & pszMessage,
+			  0,
+			  NULL);
+
+	static char szMessage[1024] = "";
+
+	if (dwRet == 0)
+		SysSNPrintf(szMessage, sizeof(szMessage) - 1, "(0x%lX) Unknown error",
+			    (unsigned long) dwError);
+	else
+		SysSNPrintf(szMessage, sizeof(szMessage) - 1, "(0x%lX) %s",
+			    (unsigned long) dwError, pszMessage);
+
+	if (pszMessage != NULL)
+		LocalFree((HLOCAL) pszMessage);
+
+	return (szMessage);
+
 }

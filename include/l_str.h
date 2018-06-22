@@ -104,4 +104,7 @@ int string2c(char * d, const char * s);
 const char * strin(const char * str_array, const char * sfind);
 const char * striin(const char * str_array, const char * sfind);
 
+const char *  skip0s(const char * s);
+int compare_number(const char * s0, const char * s1);
+
 #endif // _L_L_STR_H

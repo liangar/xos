@@ -536,6 +536,19 @@ int wcs2mbs(char * d, const wchar_t * s, int l)
 	return wcstombs(d, s, l);
 }
 
+static int x_hex2long(char c)
+{
+	if (c >= 'A' && c <= 'Z'){
+		return (int)(c - 'A' + 10);
+	}else if (c >= 'a' && c <= 'z'){
+		return (int)(c - 'a' + 10);
+	}else if (c >= '0' && c <= '9'){
+		return (int)(c - '0');
+	}
+
+	return -1;
+}
+
 int c2string(char * d, const char * s)
 {
 	char * d0 = d;
@@ -548,6 +561,7 @@ int c2string(char * d, const char * s)
 				case 'r': *d++ = '\r';  break;
 				case 'n': *d++ = '\n';  break;
 				case 't': *d++ = '\t';  break;
+				case 'x': ++s;  *d = x_hex2long(*s++);  *d <<= 4;  *d++ |= x_hex2long(*s);  break;
 				default : *d++ = '\\';  *d++ = *s;  break;
 			}
 			if (*s)
@@ -597,4 +611,16 @@ const char * striin(const char * str_array, const char * sfind)
 			return p;
 	}
 	return 0;
+}
+
+const char *  skip0s(const char * s)
+{
+	while (*s == '0' || *s == ' ' || *s == '\t')
+		++s;
+	return s;
+}
+
+int compare_number(const char * s0, const char * s1)
+{
+	return strcmp(skip0s(s0), skip0s(s1));
 }

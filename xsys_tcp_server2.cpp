@@ -85,6 +85,8 @@ void xsys_tcp_server2::timeout_check(void)
 
 bool xsys_tcp_server2::open(int listen_port, int ttl, int max_sessions, int recv_len, int send_len)
 {
+	max_sessions += 4 + max_sessions / 8;
+
 	// 最多支持1K会话
 	if (max_sessions > 1024)
 		max_sessions = 1024;
@@ -109,6 +111,10 @@ bool xsys_tcp_server2::open(int listen_port, int ttl, int max_sessions, int recv
 	m_send_len = max(send_len, 32);
 	m_send_queue.init(max(4, send_len/1024*(max_sessions/5+2)), max(max_sessions/2+1, 4));
 	m_close_requests.init(4, max_sessions/2+1);
+
+	WriteToEventLog("xsys_tcp_server2::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
+		m_session_ttl, max_sessions, m_recv_len, m_send_len
+	);
 
 	return xwork_server::open();
 }

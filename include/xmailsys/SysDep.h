@@ -224,5 +224,7 @@ SYS_OFF_T SysMMapOffsetAlign(SYS_MMAP hMap, SYS_OFF_T llOffset);
 void *SysMapMMap(SYS_MMAP hMap, SYS_OFF_T llOffset, SYS_SIZE_T lSize);
 int SysUnmapMMap(SYS_MMAP hMap, void *pAddr, SYS_SIZE_T lSize);
 
+char const *SysGetLastError(void);
+
 #endif
 

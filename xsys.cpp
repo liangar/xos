@@ -229,7 +229,7 @@ int xsys_thread::wait(int seconds)
 		seconds = SYS_INFINITE_TIMEOUT;
 	}
 	if (m_thread != SYS_INVALID_THREAD) {
-		return SysWaitThread(m_thread, seconds);
+		return SysWaitThread(m_thread, seconds * 1000);
 	}
 	return 0;
 }
@@ -420,7 +420,7 @@ int xsys_socket::accept(xsys_socket & client_sock, unsigned int timeout_ms)
 {
 	SYS_SOCKET s;
 	
-	int r = this->accept(s, timeout_ms);
+	int r = accept(s, timeout_ms);
 	client_sock.m_sock = s;
 
 	return r;
@@ -439,7 +439,7 @@ int xsys_socket::accept(SYS_SOCKET & sock, unsigned int timeout_ms)
 
 	ZeroData(ConnAddr);
 
-	if (timeout_ms <= 0)
+	if (timeout_ms == 0)
 		timeout_ms = SYS_INFINITE_TIMEOUT;
 
 	sock = SysAccept(m_sock, &ConnAddr, timeout_ms);

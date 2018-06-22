@@ -50,6 +50,47 @@ static int parse_args(int argc, char * argv[])
 	return argc;
 }
 
+static int MscGetServerAddress(char const *purl, SYS_INET_ADDR & SvrAddr, int iport)
+{
+
+	char url[MAX_HOST_NAME] = "";
+	strcpy(url, purl);
+
+	char * p;	int port;
+
+	port = iport;
+	if ((p = strchr(url, ':')) != NULL){
+		*p++ = '\0';
+		port = atoi(p);
+		if (url[0] == '!') {
+			strcpy(url, "127.0.0.1");
+		}
+	}
+
+	NET_ADDRESS NetAddr;
+
+	if ((SysInetAddr(&url[0], NetAddr) < 0) && (SysGetHostByName(&url[0], NetAddr) < 0))
+		return (ErrGetErrorCode());
+
+	SysSetupAddress(SvrAddr, AF_INET, NetAddr, port);
+
+	return (0);
+}
+
+static int udp_sendto(const char * buf, int len, const char * ip_port, int timeout_s)
+{
+	SYS_INET_ADDR SvrAddr;
+
+	MscGetServerAddress(ip_port, SvrAddr, 0);
+
+	xsys_socket sock;
+	sock.udp_listen(atoi(g_pport));
+	int r = sock.sendto(buf, len, &SvrAddr, timeout_s);
+			
+	sock.close();
+	
+	return r;
+}
 
 void main(int argc, char **argv)
 {
@@ -99,16 +140,19 @@ void main(int argc, char **argv)
 			if (g_nrecvs == 0)
 				continue;
 
-            r = strlen(b);
+            int len = strlen(b);
 			if (bisBIN){
-				r = x_hex2array((unsigned char *)sendbuf, b, r);
-				r = g_server_sock.sendto(sendbuf, r, &g_client_addr);
+				len = x_hex2array((unsigned char *)sendbuf, b, len);
+				r = udp_sendto(sendbuf, len, g_client_ip_port, 3);
 			}else{
-				r = c2string(b, b);
-				r = g_server_sock.sendto(b, r, &g_client_addr);
+				len = c2string(b, b);
+				r = udp_sendto(sendbuf, len, g_client_ip_port, 3);
 			}
+			
+			printf("send to %s %d bytes, return %d\n", g_client_ip_port, len, r);
 
 			xsys_sleep_ms(800);
+
             if (r < 0){
                 break;
 			}
@@ -152,7 +196,7 @@ static unsigned int recv_show(void * pvoid)
 	while (true){
 		SYS_INET_ADDR from_addr;
 		ZeroData(from_addr);
-		l = g_server_sock.recv_from(aline, sizeof(aline), &from_addr, 1000);
+		l = g_server_sock.recv_from(aline, sizeof(aline), &from_addr, 1);
 		if (l == ERR_TIMEOUT)
 			continue;
 
@@ -161,7 +205,7 @@ static unsigned int recv_show(void * pvoid)
 
 		if (memcmp(&from_addr, &g_client_addr, sizeof(SYS_INET_ADDR)) != 0){
 			memcpy(&g_client_addr, &from_addr, sizeof(SYS_INET_ADDR));
-			SysInetRevNToA(g_client_addr, g_client_ip_port, MAX_IP_LEN);
+			SysInetNToA(g_client_addr, g_client_ip_port);
 			printf("peer ip: %s\n", g_client_ip_port);
 			g_nrecvs = 0;
 		}

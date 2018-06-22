@@ -30,6 +30,8 @@ xsys_tcp_server::xsys_tcp_server(const char * name, int nmaxexception)
 
 bool xsys_tcp_server::open(int listen_port, int ttl, int max_sessions, int recv_len)
 {
+	max_sessions += 4 + max_sessions / 8;
+
 	if (max_sessions > 1024)
 		max_sessions = 1024;
 
@@ -53,6 +55,10 @@ bool xsys_tcp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 	m_session_init_len = sizeof(xtcp_session) - ((char *)p->peerip - (char *)p);
 
 	m_lock.init();
+
+	WriteToEventLog("xsys_tcp_server::open: TTL=%d, max session=%d, recv_len=%d",
+		m_session_ttl, max_sessions, m_recv_len
+	);
 
 	return xwork_server::open();
 }

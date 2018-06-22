@@ -52,7 +52,7 @@ int xsys_udp_server::session_close_used(int i_used)
 	session_close(i);
 
 	--m_used_count;
-	if (m_used_count > i_used)	// 正常不可能，用于防护以外
+	if (m_used_count > i_used)	// 用于防护意外
 		memmove(m_pused_index + i_used, m_pused_index+i_used+1, m_used_count-i_used);
 
 	return i;
@@ -122,6 +122,8 @@ int xsys_udp_server::opened_find(int * crc, SYS_INET_ADDR * addr)
 
 bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_len, int send_len)
 {
+	max_sessions += 4 + max_sessions / 8;
+
 	if (max_sessions > 1024)
 		max_sessions = 1024;
 	else{
@@ -149,6 +151,10 @@ bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 	m_send_len = max(send_len, 32);
 	m_send_queue.init(max(4, send_len/1024*(max_sessions/5+2)), max(max_sessions/2+1, 4));
 	m_close_requests.init(4, max_sessions/2+1);
+
+	WriteToEventLog("xsys_udp_server::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
+		m_session_ttl, max_sessions, m_recv_len, m_send_len
+	);
 
 	return xwork_server::open();
 }
@@ -257,7 +263,7 @@ void xsys_udp_server::run(void)
 			WriteToEventLog("新建会话:%04X", crc);
 			if (m_used_count > 0){
 				if (m_session_count == m_used_count){
-					WriteToEventLog("强制最早建立的会话过期");
+					WriteToEventLog("强制最早建立的会话过期，used = %d", m_used_count);
 					i = session_close_used(0);
 				}else{
 					// 从最后的开始找
@@ -404,8 +410,15 @@ void xsys_udp_server::send_server(void)
 
 	m_send_queue.set_timeout_ms(120*1000);
 
+	// create a socket for send
+	xsys_socket sock;
+
 	while (m_isrun && m_listen_sock.isopen()){
 		int i_session = -1;
+
+		// bind to the local port
+		if (!sock.isopen())
+			sock.udp_listen(m_listen_port);
 
 		int len = m_send_queue.get_free((long *)&i_session, ptemp_buf);
 
@@ -428,16 +441,20 @@ void xsys_udp_server::send_server(void)
 		if (i < 0 || i > m_session_count || !PUDPSESSION_ISOPEN(m_psessions+i)){
 			WriteToEventLog("%s: 出错,试图在未打开的会话上发送(%d)", szFunctionName, i);
 		}else{
-			int r = m_listen_sock.sendto(ptemp_buf, len, &m_psessions[i].addr, 1000);
+			// send ...
+			int r = sock.sendto(ptemp_buf, len, &m_psessions[i].addr, 3);
 			if (r <= 0){
 				WriteToEventLog("%s: 发送错误(%d)(return = %d)", szFunctionName, i, r);
 				notify_close_session(i);
+				sock.close();
 			}else{
 				WriteToEventLog("%s: the %dth session sent (ret = %d, len=%d)", szFunctionName, i, r, len);
 				on_sent(i, r);
 			}
 		}
 	}
+
+	sock.close();
 
 	::free(ptemp_buf);
 
@@ -545,7 +562,7 @@ int xsys_udp_server::notify_close_session(int i, bool need_shift)
 {
 	int r = m_close_requests.put(i, (char *)&i, 0);
 
-	WriteToEventLog("notify_close_session: %d(r = %d)", i, r);
+	WriteToEventLog("udp_server notify_close_session: %d(r = %d)", i, r);
 
 	if (need_shift && (i % 4) == 0)
 		xsys_sleep_ms(50);

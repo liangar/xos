@@ -95,12 +95,29 @@ bool xlist<T>::add(const T * h)
 
 	if (m_all <= m_count){
 		int l = m_count + m_nstep;
-		T * p = (T *)realloc(m_phandles, sizeof(T) * l);
+
+		// 保证数据正确性的检查、调整
+		if (l == 0){
+			if (m_nstep < 8)
+				m_nstep = l = 8;
+			m_count = 0;
+		}
+
+		// 分配空间
+		T * p;
+		if (m_phandles == 0)
+			p = (T *)calloc(l, sizeof(T));
+		else
+			p = (T *)realloc(m_phandles, sizeof(T) * l);
+
 		if (p == 0)  return false;
 
+		// 修改
 		m_all = l;
 		m_phandles = p;
 	}
+	
+	// 存放数据
 	memcpy(m_phandles + m_count, h, sizeof(T));
 	m_count ++;
 

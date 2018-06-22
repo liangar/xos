@@ -9,6 +9,7 @@ xdev_comm::xdev_comm(const char * name, int recv_max_len)
 	m_recv_len = 0;
 	m_recv_max_len = recv_max_len;
 	m_precv_buf = 0;
+	m_use_full_log = true;
 }
 
 xdev_comm::~xdev_comm()
@@ -84,7 +85,8 @@ void xdev_comm::save_data(const char * buf, int len)
 
 	m_recv_len += len;
 
-	write_buf_log(m_name, (unsigned char *)m_precv_buf, m_recv_len);
+	if (m_use_full_log)
+		write_buf_log(m_name, (unsigned char *)m_precv_buf, m_recv_len);
 
 	m_has_data.set();
 
@@ -151,7 +153,7 @@ int xdev_comm::recv_bytes(char *buf, int len, int seconds)
 		i += r;
 	}
 	WriteToEventLog("%s - recv_bytes(%d): recved %d bytes.", m_name, len, i);
-	if (i > 0)
+	if (i > 0 && m_use_full_log)
 		EL_WriteHexString(buf, i);
 
 	return i;
@@ -177,7 +179,7 @@ int xdev_comm::recv_byend(char * buf, int maxlen, char * endstr, int seconds)
 		}
 	}
 	WriteToEventLog("%s - recv_bytes(%d): recved %d bytes.", m_name, maxlen, i);
-	if (i > 0)
+	if (i > 0 && m_use_full_log)
 		EL_WriteHexString(buf, i);
 
 	if (strstr(buf, endstr) == 0)

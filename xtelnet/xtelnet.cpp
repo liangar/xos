@@ -172,7 +172,7 @@ void main(int argc, char **argv)
 //	r = recv_data();
 
 	try{
-		char b[1024];
+		char b[1024*4];
 		printf("peer ip: %s\n", g_sock.get_peer_ip(b));
 		printf("self ip: %s\n", g_sock.get_self_ip(b));
 

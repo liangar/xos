@@ -29,6 +29,7 @@ public:
 
 	int  unread_bytes(void)  {  return m_recv_len;  }
 
+	void set_brief_log(void) {  m_use_full_log = false;  }
 	char m_name[64];
 
 protected:
@@ -39,6 +40,8 @@ protected:
 protected:
 	xsys_mutex  m_buf_lock;
 	xsys_event  m_has_data;
+
+	bool m_use_full_log;
 
 	// 串口数据接收Buffer
 	int  m_recv_len;
