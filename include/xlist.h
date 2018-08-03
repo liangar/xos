@@ -45,6 +45,9 @@ public:
 
 	T * m_phandles;				// 数组
 	int m_count, m_all, m_nstep;	// 当前空间长度,总长度,增长速度
+
+protected:
+	bool increate_a_step(void);
 };
 template <class T>
 xlist<T>::xlist()
@@ -89,32 +92,41 @@ int xlist<T>::down()
 }
 
 template <class T>
+bool xlist<T>::increate_a_step(void)
+{
+	int l = m_count + m_nstep;
+
+	// 保证数据正确性的检查、调整
+	if (l == 0){
+		if (m_nstep < 8)
+			m_nstep = l = 8;
+		m_count = 0;
+	}
+
+	// 分配空间
+	T * p;
+	if (m_phandles == 0)
+		p = (T *)calloc(l, sizeof(T));
+	else
+		p = (T *)realloc(m_phandles, sizeof(T) * l);
+
+	if (p == 0)  return false;
+
+	// 修改
+	m_all = l;
+	m_phandles = p;
+	
+	return true;
+}
+
+template <class T>
 bool xlist<T>::add(const T * h)
 {
 	if (h == 0)  return true;
 
 	if (m_all <= m_count){
-		int l = m_count + m_nstep;
-
-		// 保证数据正确性的检查、调整
-		if (l == 0){
-			if (m_nstep < 8)
-				m_nstep = l = 8;
-			m_count = 0;
-		}
-
-		// 分配空间
-		T * p;
-		if (m_phandles == 0)
-			p = (T *)calloc(l, sizeof(T));
-		else
-			p = (T *)realloc(m_phandles, sizeof(T) * l);
-
-		if (p == 0)  return false;
-
-		// 修改
-		m_all = l;
-		m_phandles = p;
+		if (!increate_a_step())
+			return false;
 	}
 	
 	// 存放数据
@@ -133,12 +145,8 @@ bool xlist<T>::insert(T * h, int i)
 		i = m_count;
 
 	if (m_all <= m_count){
-		int l = m_count + m_nstep;
-		T * p = (T *)realloc(m_phandles, sizeof(T) * l);
-		if (p == 0)  return false;
-
-		m_all = l;
-		m_phandles = p;
+		if (!increate_a_step())
+			return false;
 	}
 	if (i < m_count)
 		memmove(m_phandles + i + 1, m_phandles + i, sizeof(T) * (m_count - i));
@@ -184,7 +192,7 @@ int xlist<T>::free_all()
 template <class T>
 bool xlist<T>::merge(xlist<T> * plist)
 {
-	if (plist->m_count == 0)  return true;
+	if (plist->m_count <= 0)  return true;
 
 	int n = m_count + plist->m_count;
 	T * p;

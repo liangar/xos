@@ -21,7 +21,7 @@ struct xudp_session{
 	int		running_cmdid;
 };
 
-#define PUDPSESSION_ISOPEN(p)	((p)->addr.iSize > 0)
+#define PUDPSESSION_ISOPEN(p)	((p)->addr_crc != 0)
 
 class xsys_udp_server : public xwork_server
 {
@@ -52,11 +52,11 @@ public:
 	void send_server(void);	/// 发送处理线程
 	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
 	
-	void notify_do_cmd(void)  {  m_has_new_cmd = true;  }
+	void notify_do_cmd(const char * cmd = 0);
 
 	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
 	virtual int  do_msg(int i, char * msg, int msg_len) = 0;	/// 处理消息
-	virtual int  do_cmd(void) = 0;	/// 主动命令执行
+	virtual int  do_cmd(const char * cmd = 0) = 0;	/// 主动命令执行
 	
 	virtual bool on_sent	(int i, int len) = 0;	/// 发送完成
 	virtual bool on_closed  (int i) = 0;

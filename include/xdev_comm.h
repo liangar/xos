@@ -1,6 +1,8 @@
 #ifndef _xdev_comm_H_
 #define _xdev_comm_H_
 
+#define ERR_DEV_OFFLINE	-200001 // 设备不在线
+
 class xdev_comm{
 public:
 	xdev_comm(const char * name, int recv_max_len);

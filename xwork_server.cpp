@@ -60,15 +60,19 @@ bool xwork_server::open(void)
 	m_laststart[0] = '\0';
 	m_cmd[0] = m_parms[0] = '\0';
 
+	m_pprop_lock = new xsys_mutex;
+	m_pprop_lock->init();
+
 	m_phworker = new xsys_thread[m_works];
 	m_exceptiontimes = 0;
 	m_heartbeat = long(time(0));
 	m_run_times = 0;
+
 	if (m_phworker == 0){
+		m_pprop_lock->down();
+		delete m_pprop_lock;  m_pprop_lock = 0;
 		return false;
 	}
-	m_pprop_lock = new xsys_mutex;
-	m_pprop_lock->init();
 
 	return true;
 }
@@ -185,7 +189,7 @@ bool xwork_server::restart(int secs)
 
 void xwork_server::notify(const char * cmd, const char * parms)
 {
-	if (lock_prop(2) < 0)
+	if (lock_prop(2) < 0)	///
 		return;
 
 	if (cmd){
@@ -254,6 +258,7 @@ unsigned int xwork_server::master(void * data)
 		}catch(...){
 			q->m_exceptiontimes++;
 			WriteToEventLog("%s : 执行异常,次数:%d", q->m_name, q->m_exceptiontimes);
+			xsys_sleep(3);
 		}
 		if (q->m_exceptiontimes >= q->m_maxexception){
 			break;
