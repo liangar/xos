@@ -118,7 +118,7 @@ int xsqlite3::trans_end(bool isok)
     if (m_pdb == NULL)  return XSQL_ERROR;
 
 	if (m_db_lock)
-		m_db_lock->lock(2);
+		m_db_lock->lock(300);
 
 	if (isok)
 		n = sqlite3_exec(m_pdb, "COMMIT", 0, 0, 0);

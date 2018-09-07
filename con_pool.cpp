@@ -102,8 +102,8 @@ connection * con_pool::open()
 {
 	static const char szFunctionName[] = "con_pool::open";
 
-	if (m_mutex.lock(10) != 0){
-		sprintf(m_lastmsg, "%s: lock(10) path error", szFunctionName);
+	if (m_mutex.lock(100) != 0){
+		sprintf(m_lastmsg, "%s: lock(100) path error", szFunctionName);
 		WriteToEventLog("%s: %s", szFunctionName, m_lastmsg);
 		return 0;
 	}
@@ -189,7 +189,7 @@ unsigned int con_pool::schedule(void * data)
 
 	int t = 0;
 	while (p->m_estop.wait(p->m_idle) == ERR_TIMEOUT){
-		if (p->m_mutex.lock(10))
+		if (p->m_mutex.lock(300))
 			continue;
 
 		for (int i = 0; i < p->m_list.m_count; i++){

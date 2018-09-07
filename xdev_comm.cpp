@@ -77,7 +77,7 @@ void xdev_comm::save_data(const char * buf, int len)
 		return;
 	}
 
-	m_buf_lock.lock(1);
+	lock();
 
 	if (len + m_recv_len > m_recv_max_len)
 		m_recv_len = 0;
@@ -90,7 +90,7 @@ void xdev_comm::save_data(const char * buf, int len)
 
 	m_has_data.set();
 
-	m_buf_lock.unlock();
+	unlock();
 }
 
 int xdev_comm::peek(char & c)
@@ -98,13 +98,13 @@ int xdev_comm::peek(char & c)
 	if (!isopen())  return -1;
 
 	int r;
-	m_buf_lock.lock(2);
+	lock();
 	if (m_recv_len > 0){
 		c = m_precv_buf[0];
 		r = 1;
 	}else
 		r = 0;
-	m_buf_lock.unlock();
+	unlock();
 
 	return r;
 }
@@ -114,12 +114,12 @@ int xdev_comm::peek(char * buf, int maxlen)
 	if (!isopen())  return -1;
 
 	int l;
-	m_buf_lock.lock(2);
+	lock();
 	l = min(maxlen, m_recv_len);
 	if (l > 0){
 		memcpy(buf, m_precv_buf, l);
 	}
-	m_buf_lock.unlock();
+	unlock();
 
 	return l;
 }
@@ -127,14 +127,14 @@ int xdev_comm::peek(char * buf, int maxlen)
 void xdev_comm::skip(int bytes)
 {
 	if (isopen()){
-		m_buf_lock.lock(2);
+		lock();
 		if (bytes >= m_recv_len)
 			m_recv_len = 0;
 		else{
 			m_recv_len -= bytes;
 			memmove(m_precv_buf, m_precv_buf+bytes, m_recv_len);
 		}
-		m_buf_lock.unlock();
+		unlock();
 	}
 }
 
@@ -213,12 +213,12 @@ int xdev_comm::recv_byend(char * buf, int maxlen, char endch, int seconds)
 
 void xdev_comm::clear_all_recv(void)
 {
-	m_buf_lock.lock(2);
+	lock();
 
 	m_recv_len = 0;
 	m_has_data.reset();
 
-	m_buf_lock.unlock();
+	unlock();
 }
 
 int xdev_comm::recv(char *buf, int len, int msec)
@@ -254,7 +254,7 @@ int xdev_comm::recv(char *buf, int len, int msec)
 
 void xdev_comm::lock(void)
 {
-	m_buf_lock.lock(3);
+	m_buf_lock.lock(300);
 }
 
 void xdev_comm::unlock(void)

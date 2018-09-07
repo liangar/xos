@@ -23,6 +23,8 @@ public:
 
 	bool isempty(void);
 	bool isfull(void);
+	
+	bool clear(void);
 
 	int put(long id, const char * s);	/// 放数据
 	int put(long id, const void * s, int len);
@@ -43,6 +45,9 @@ public:
 	void bindto(xsys_semaphore * psem)  {  m_psem->bindto(psem);  }
 
 protected:
+	void init_vars(void);
+
+protected:
 	xcirc_simple<xseq_buf_use>	m_uses;	/// 对缓冲区的使用
 
 	const char * m_last_alloc;
@@ -51,7 +56,6 @@ protected:
 	char * m_p_head_free;	int m_head_free_size;	/// 可用头
 	char * m_p_tail_free;	int m_tail_free_size;	/// 可用尾
 
-protected:
 	xsys_mutex * m_hmutex;	/// 使用缓冲的临界区
 	xsys_semaphore	* m_psem;
 

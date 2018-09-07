@@ -17,6 +17,16 @@ xseq_buf::~xseq_buf()
 	down();
 }
 
+void xseq_buf::init_vars(void)
+{
+	m_p_head_free = m_pbuf;
+	m_head_free_size = m_buf_size;
+	m_p_tail_free = m_pbuf+m_buf_size;
+	m_tail_free_size = 0;
+
+	m_last_alloc = m_p_head_free;
+}
+
 int xseq_buf::init(int bufsize, int uses)
 {
 	if (bufsize < 4)
@@ -28,9 +38,8 @@ int xseq_buf::init(int bufsize, int uses)
 		return -1;
 
 	m_buf_size = bufsize;
-	m_p_head_free = m_pbuf;  m_head_free_size = bufsize;
-	m_p_tail_free = m_pbuf+bufsize, m_tail_free_size = 0;
-	m_last_alloc = m_p_head_free;
+
+	init_vars();
 
 	int r = m_uses.open(uses);
 	m_timeout_ms = 2000;
@@ -38,10 +47,23 @@ int xseq_buf::init(int bufsize, int uses)
 	m_psem = new xsys_semaphore;
 	m_hmutex = new xsys_mutex;
 	m_hmutex->init();
-	
+
 	return m_psem->init(0, uses);
 }
 
+bool xseq_buf::clear(void)
+{
+	if (m_hmutex->lock(1000) != 0)
+		return false;
+
+	if (m_uses.isempty()){
+		init_vars();
+	}
+
+	m_hmutex->unlock();
+
+	return true;
+}
 
 int xseq_buf::down(void)
 {
@@ -69,7 +91,7 @@ bool xseq_buf::isempty(void)
 {
 	bool b;
 
-	m_hmutex->lock(1);
+	m_hmutex->lock(1000);
 	b = m_uses.isempty();
 	m_hmutex->unlock();
 
@@ -80,7 +102,7 @@ bool xseq_buf::isfull(void)
 {
 	bool b;
 
-	m_hmutex->lock(1);
+	m_hmutex->lock(1000);
 	b = m_uses.isfull();
 	m_hmutex->unlock();
 
@@ -116,7 +138,7 @@ int xseq_buf::put(long id, const void * s, int len)
 		m_hmutex->unlock();
 		return -1;
 	}
-	
+
 	if (m_last_alloc == m_p_tail_free && m_tail_free_size > len){
 		use.p = m_p_tail_free;
 		m_p_tail_free += use.len;
@@ -213,12 +235,12 @@ int xseq_buf::get(long * id, void * d)
 int xseq_buf::get(xseq_buf_use * use)
 {
 	memset(use, 0, sizeof(xseq_buf_use));
-	
+
 	if (m_psem->P(m_timeout_ms) != 0)
 		return -1;
-	
+
 	m_hmutex->lock(1000);
-	
+
 	if (m_uses.isempty()){
 		m_hmutex->unlock();
 		return -1;
@@ -242,14 +264,14 @@ int xseq_buf::get_free(long * id, char * pdata)
 	int r = m_psem->P(m_timeout_ms);
 	if (r != 0)
 		return r;
-	
+
 	m_hmutex->lock(1000);
-	
+
 	if (m_uses.isempty()){
 		m_hmutex->unlock();
 		return -1;
 	}
-	
+
 	if (m_uses.out(&use)){
 		m_hmutex->unlock();
 		return -1;
@@ -260,7 +282,7 @@ int xseq_buf::get_free(long * id, char * pdata)
 	}
 
 	m_hmutex->unlock();
-	
+
 	free_use(use);
 
 	return use.len;

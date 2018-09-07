@@ -419,7 +419,7 @@ int xsys_socket::udp_listen(int nportnumber)
 int xsys_socket::accept(xsys_socket & client_sock, unsigned int timeout_ms)
 {
 	SYS_SOCKET s;
-	
+
 	int r = accept(s, timeout_ms);
 	client_sock.m_sock = s;
 
@@ -446,7 +446,7 @@ int xsys_socket::accept(SYS_SOCKET & sock, unsigned int timeout_ms)
 	if (sock == SYS_INVALID_SOCKET) {
 		return (ErrGetErrorCode());
 	}
-	
+
 	return 0;
 }
 
@@ -530,6 +530,9 @@ int xsys_socket::recv(char * buf, int l, int timeout_ms)
 	if (m_sock == SYS_INVALID_SOCKET) {
 		return -1;
 	}
+
+	if (l < 1)
+		return 0;
 
 	if (timeout_ms < 0){
 		timeout_ms = SYS_INFINITE_TIMEOUT;
@@ -683,6 +686,10 @@ int xsys_socket::recv_all(char * buf, int l, int timeout)
 	if (m_sock == SYS_INVALID_SOCKET) {
 		return -1;
 	}
+
+	if (l < 1)
+		return 0;
+
 	if (timeout < 0){
 		timeout = SYS_INFINITE_TIMEOUT;
 	}

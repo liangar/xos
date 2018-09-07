@@ -89,6 +89,8 @@ void xsys_udp_server::timeout_check(void)
 	int i;
 
 	lock_prop(2);	///
+
+	int n = m_used_count;
 	for (i = m_used_count-1; i >= 0; i--){
 		int j = m_pused_index[i];
 
@@ -98,6 +100,9 @@ void xsys_udp_server::timeout_check(void)
 			session_close_used(i);
 		}
 	}
+	if (n > 0 && m_used_count < 1)
+		m_recv_queue.clear();
+
 	unlock_prop();
 }
 
@@ -280,7 +285,7 @@ void xsys_udp_server::run(void)
 		i = opened_find(&crc, &from_addr);
 
 		if (i == -1){
-			WriteToEventLog("新建会话:%04X", crc);
+			WriteToEventLog("新建会话:%04X, time = %d", crc, m_heartbeat);
 			if (m_used_count > 0){
 				if (m_session_count == m_used_count){
 					WriteToEventLog("强制最早建立的会话过期，used = %d", m_used_count);
@@ -319,13 +324,19 @@ void xsys_udp_server::run(void)
 
 		// receive data
 		m_precv_buf[len] = '\0';
-		WriteToEventLog("%s: client[%d, len=%d]", szFunctionName, i, len);
-		session_recv(i, len);	// 将数据存入session的临时缓存
-		m_psessions[i].recv_state = XTS_RECVING;
+		int r = session_recv(i, len);	// 将数据存入session的临时缓存
+		if (r >= len){
+			m_psessions[i].recv_state = XTS_RECVING;
+			// 检查接收状态
+			// 返回首个完整包的应有长度，0 < 为非协议包
+			r = calc_msg_len(i);
+			WriteToEventLog("%s: client[%d, len=%d], msg_len=%d, time = %d", szFunctionName, i, len, r, m_heartbeat);
+		}else{
+			WriteToEventLog("%s: client[%d, len=%d] save error, r=%d, time = %d", szFunctionName, i, len, r, m_heartbeat);
+			r = -1;
+			m_psessions[i].recv_state = XTS_RECV_ERROR;
+		}
 
-		// 检查接收状态
-		// 返回首个完整包的应有长度，0 < 为非协议包
-		int r = calc_msg_len(i);
 		if (r <= 0){
 			// 无效或无用数据，则释放
 			write_buf_log("xsys_udp_server recved INVALID data", (unsigned char *)m_precv_buf, len);
@@ -339,7 +350,10 @@ void xsys_udp_server::run(void)
 
 		switch (m_psessions[i].recv_state){
 		case XTS_RECVED:
-			WriteToEventLog("%s: %d - recved a packet data", szFunctionName, i);
+			WriteToEventLog("%s: %d - recved a packet data(%d/%d/%d)",
+				szFunctionName, i,
+				r, len, m_psessions[i].recv_len
+			);
 			// 将收到的完整包逐条发到request消息队列中
 			while (r <= m_psessions[i].recv_len){
 				// 发布
@@ -391,6 +405,7 @@ void xsys_udp_server::msg_server(void)
 					continue;
 				}
 
+				r = 0;
 				if (isession < 0 || isession >= m_session_count){
 					// 系统通知执行，或者出错
 					if (isession == -1){
@@ -408,11 +423,17 @@ void xsys_udp_server::msg_server(void)
 						}
 					}else
 						WriteToEventLog("%s: <%d>, len = %d, 超出会话界限,忽略", szFunctionName, isession, len);
+
+					if (r == XSYS_IP_FATAL)
+						notify_close_session(isession, false);
+
 					continue;
 				}
 
 				/// 调用处理函数进行消息处理
 				r = do_msg(isession, ptemp_buf, len);
+				if (r == XSYS_IP_FATAL)
+					notify_close_session(isession, false);
 
 				WriteToEventLog("%s: <%d>处理%d长的数据，返回%d", szFunctionName, isession, len, r);
 			}
@@ -463,18 +484,19 @@ void xsys_udp_server::send_server(void)
 		write_buf_log(szFunctionName, (unsigned char *)ptemp_buf, len);
 
 		// find session
-		int i = i_session;
+		int i = i_session, t = int(time(0));
+
 		if (i < 0 || i > m_session_count || !PUDPSESSION_ISOPEN(m_psessions+i)){
 			WriteToEventLog("%s: 出错,试图在未打开的会话上发送(%d)", szFunctionName, i);
 		}else{
 			// send ...
 			int r = sock.sendto(ptemp_buf, len, &m_psessions[i].addr, 3);
 			if (r <= 0){
-				WriteToEventLog("%s: 发送错误(%d)(return = %d)", szFunctionName, i, r);
+				WriteToEventLog("%s: 发送错误(%d)(return = %d, time = %d)", szFunctionName, i, r, t);
 				notify_close_session(i);
 				sock.close();
 			}else{
-				WriteToEventLog("%s: the %dth session sent (ret = %d, len=%d)", szFunctionName, i, r, len);
+				WriteToEventLog("%s: the %dth session sent (ret = %d, len=%d, time = %d)", szFunctionName, i, r, len, t);
 				on_sent(i, r);
 			}
 		}
@@ -567,7 +589,10 @@ void xsys_udp_server::session_open(int i)
 
 	psession->createTime = time(0);
 	psession->last_trans_time = long(psession->createTime);
+
+	// 如果不加，会是0，此数或许会被应用程序用到，故此设置为-1
 	psession->peerid = -1;
+	psession->running_cmdid = -1;
 }
 
 void xsys_udp_server::session_close(xudp_session * psession)
@@ -670,6 +695,8 @@ int xsys_udp_server::session_recv(int i, int len)
 
 	psession->last_trans_time = m_heartbeat;
 
+	if (psession->recv_len < 0)
+		psession->recv_len = 0;
 	int l = psession->recv_len + len;
 	if (psession->recv_buflen < l+1){
 		void * p;
