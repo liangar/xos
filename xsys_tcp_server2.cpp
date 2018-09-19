@@ -98,7 +98,7 @@ bool xsys_tcp_server2::open(int listen_port, int ttl, int max_sessions, int recv
 		m_recv_len = 1024;
 
 	// 打开最多会话数的缓冲区长度
-	m_recv_queue.init(max(4,(m_recv_len / 1024) * max_sessions + 2), max(max_sessions, 4));
+	m_recv_queue.init(max(4, (m_recv_len+1023) / 1024 * (max_sessions / 2) + 2), max(max_sessions, 4));
 
 	m_precv_buf = (char *)calloc(m_recv_len+1, 1);
 

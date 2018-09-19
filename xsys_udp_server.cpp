@@ -144,7 +144,7 @@ bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 			max_sessions += 4;
 	}
 
-	m_recv_queue.init((recv_len / 1024 + 1) * max_sessions, max_sessions);
+	m_recv_queue.init(max( 4, (recv_len+1023) / 1024 * (max_sessions / 2) + 2), max(max_sessions, 4));
 	m_listen_port = listen_port;
 	m_session_ttl = ttl;
 
