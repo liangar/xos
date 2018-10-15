@@ -17,11 +17,12 @@ typedef struct tagparsestate{
     parseurlfunc * 	pf;   			// transform function point
 } parsestate, * LPparsestate;
 
-static int parsetcp(LPn_url purl, const char * urlstring);
+static int parsetcp (LPn_url purl, const char * urlstring);
 static int parsesmtp(LPn_url purl, const char * urlstring);
 static int parsepop3(LPn_url purl, const char * urlstring);
 static int parsemail(LPn_url purl, const char * urlstring);
-static int parseftp(LPn_url purl, const char * usrlstring);
+static int parseftp (LPn_url purl, const char * urlstring);
+static int parsehttp(LPn_url purl, const char * urlstring);
 
 static parsestate thetable[] = {
     {"tcp" , urltcp , parsetcp },  // parse tcp (tcp://(<hostname>|!):<portnumber>)
@@ -29,11 +30,14 @@ static parsestate thetable[] = {
     {"pop3", urlpop3, parsepop3},  // parse pop3(pop3://<hostname>[:port]/<uid>;<pwd>)
 	{"mail", urlmail, parsemail},  // parse mail(mail://<smtphostname>[:smtpport];<pop3hostname>[:pop3port]/<pop3account>,<pwd>)
 	{"ftp",  urlftp,  parseftp},   // parse ftp (ftp://<host>[:port][ \t]*(<uid>,<pwd>)[ \t]*<path>
+	{"http", urlhttp, parsehttp},   // parse ftp (ftp://<host>[:port][ \t]*(<uid>,<pwd>)[ \t]*<path>
     {NULL  , urlnull, NULL     }
 };
 
 int parseurl(LPn_url purl, const char * urlstring)
 {
+	memset(purl, 0, sizeof(n_url));
+
     const char * q = strchr(urlstring, ':');  int l = int(q - urlstring);
 
     if (q == NULL || q[1] != '/' || q[2] != '/')  return -1;
@@ -218,3 +222,12 @@ static int parseftp(LPn_url purl, const char * urlstring)
 	return 0;
 }
 
+static int parsehttp(LPn_url purl, const char * urlstring)
+{
+	char url[512];
+	trim_all(url, (char *)urlstring);
+	const char * p = getaword(purl->http.host, url, " \t", "(/");
+	strcpy(purl->http.path, p);
+
+	return 0;
+}

@@ -76,8 +76,9 @@ public:
 	virtual int  do_msg(int i, char * msg, int msg_len) = 0;
 	virtual int  do_idle(int i) = 0;
 	
-	virtual bool on_sent	 (int i, int len) = 0;	/// 发送完成
-	virtual bool on_closed   (int i) = 0;
+	virtual bool on_opened	(int i);
+	virtual bool on_closed  (int i);
+	virtual bool on_sent	(int i, int len) = 0;	/// 发送完成
 
 	xseq_buf * get_recv_queue(void){
 		return &m_recv_queue;

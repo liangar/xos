@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <des.h>
 
@@ -19,11 +20,13 @@ static void bitset(BYTE * array, int bitno);
 
 deshandle des_open(const char * key, int l)
 {
-	BYTE * h = new BYTE[16*7];
+	BYTE * h = (BYTE *)calloc(8*16, 1);
 
 	BYTE bkey[7], k[12];	int i;
 
 	memset(k, '\0', 8);
+	memset(bkey, '\0', 7);
+
 	if (l <= 0)
 		strncpy((char *)k, key, 8);
 	else{
@@ -31,8 +34,6 @@ deshandle des_open(const char * key, int l)
 		memcpy(k, key, l);
 	}
 
-	memset(h, '\0', 7*16);
-	memset(bkey, '\0', 7);
 	permut(bkey, k, p1);	/* PERMUTATION NU 1 */
 
 	for (i = 0 ; i < 16 ; i++) {
@@ -45,7 +46,7 @@ deshandle des_open(const char * key, int l)
 int des_close(deshandle & h)
 {
 	if (h){
-		delete[] h;  h = 0;
+		free(h);  h = 0;
 	}
 	return 0;
 }
@@ -59,13 +60,14 @@ int des_encode(deshandle h, char * d, char * s, int len)
 	else
 		l = 0;
 
-	char * p = new char[len+l];
-	memcpy(p, s, len);  if (l)  memset(p+len, 0, l);  l += len;
+	char * p = (char *)calloc(len+l, 1);
+	memcpy(p, s, len);  l += len;
 
 	for (len = 0, s = p; len < l; len += 8, d += 8, s += 8){
 		des_encode(h, d, s);
 	}
-	delete[] p;
+	free(p);
+
 	return l;
 }
 

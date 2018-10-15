@@ -130,6 +130,7 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>
     </ClCompile>
     <ClCompile Include="xdev_comm.cpp" />
+    <ClCompile Include="xhttp_server.cpp" />
     <ClCompile Include="xmailsys\MkMachDep.cpp" />
     <ClCompile Include="xmailsys\SysDepCommon.cpp" />
     <ClCompile Include="xseq_buf.cpp">

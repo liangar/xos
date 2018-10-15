@@ -153,6 +153,8 @@ void xsys_tcp_server2::run(void)
 
 	WriteToEventLog("%s : in.\n", szFunctionName);
 
+	xsys_sleep(3);
+
 	if (!m_listen_sock.isopen() && m_listen_sock.listen(m_listen_port) != 0){
 		WriteToEventLog("%s : 创建消息监听(%d)失败，退出运行", szFunctionName, m_listen_port);
 		return;
@@ -393,6 +395,8 @@ void xsys_tcp_server2::send_server(void)
 
 	m_send_queue.set_timeout_ms(120*1000);
 
+	xsys_sleep(1);
+
 	while (m_isrun && m_listen_sock.isopen()){
 		int i_session = -1;
 
@@ -539,7 +543,7 @@ void xsys_tcp_server2::session_close(xtcp2_session * psession)
 	}
 
 	if (psession->precv_buf){
-		free(psession->precv_buf);  psession->precv_buf = 0;
+		::free(psession->precv_buf);  psession->precv_buf = 0;
 	}
 
 	memset(psession, 0, sizeof(xtcp2_session));
@@ -656,4 +660,14 @@ int xsys_tcp_server2::send(int isession, const char * s, int len)
 int xsys_tcp_server2::send(int isession, const char * s)
 {
 	return send(isession, s, strlen(s));
+}
+
+bool xsys_tcp_server2::on_opened(int i)
+{
+	return true;
+}
+
+bool xsys_tcp_server2::on_closed(int i)
+{
+	return true;
 }

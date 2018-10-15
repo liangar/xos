@@ -6,6 +6,7 @@ static inline char atohex(char a)
 	if (a <= '\x09')  return a + '0';
 	return 'a' + a - '\xa';
 }
+
 void xstrcrypt(char * d, const char * s)
 {
 	unsigned char b;
@@ -21,6 +22,7 @@ void xstrcrypt(char * d, const char * s)
 int xstrdecrypt(char * d, const char * s)
 {
 	unsigned char b0, b1;
+
 	int i;
 	for (i = 0;  *s;  d++, i++){
 		b0 = *s++;  if (b0 < 'a')  b0 -= '0';  else  b0 -= 'a' - 10;

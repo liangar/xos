@@ -10,7 +10,8 @@ enum urltype{
 	urlsmtp,
 	urlpop3,
 	urlmail,
-	urlftp
+	urlftp,
+	urlhttp
 };
 
 typedef struct tagn_tcp{
@@ -47,6 +48,11 @@ typedef struct tagn_ftp{
 	char path[128];
 }n_ftp, * LPn_ftp;
 
+typedef struct tagn_http{
+	char host[64];
+	char path[128];
+}n_http, * LPn_http;
+
 typedef struct tagn_url{
     urltype	n_type;
     int  	s_r;   	// send, recieve(N_URL_SEND|RECV)
@@ -56,6 +62,7 @@ typedef struct tagn_url{
 	    n_pop3	pop3;
 		n_mail	mail;
 		n_ftp	ftp;
+		n_http	http;
     };
 } n_url, * LPn_url;
 
