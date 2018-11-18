@@ -20,9 +20,10 @@ using namespace std;
 int		nsends, nrecvs;
 bool	bisBIN = false;
 bool	bisTCP = true;
+int 	nsessions = 1;
 const char * g_phost = 0;
 
-xsys_socket g_sock;
+xsys_socket * g_psock;
 
 static unsigned int recv_show(void * pvoid);
 
@@ -69,26 +70,16 @@ char * utf8_2_multichar(const char * s, int &len)
 	return psz_s;
 }
 
-int recv_data(void)
-{
-	int l = 0, r;
-	do {
-		char aline[512];
-		r = g_sock.recv(aline, sizeof(aline)-1, 5);
-		if (r < 1)
-			return r;
-		aline[r] = 0;
-		puts(aline);
-		l += r;
-	}while (r == 511);
-	return l;
-}
-
 static int parse_args(int argc, char * argv[])
 {
 	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] != '-' && argv[i][0] != '/'){
 			g_phost = argv[i];
+			continue;
+		}
+
+		if (isdigits(argv[i] + 1) > 0){
+			nsessions = atoi(argv[i] + 1);
 			continue;
 		}
 
@@ -159,38 +150,59 @@ void main(int argc, char **argv)
 	test_xsys_log(sendbuf);
 //*/
 
-	int r = g_sock.connect(g_phost, 0, 30, bisTCP);
+	char b[1024*4];
 
-	printf("connect return: %d\n", r);
+	g_psock = new xsys_socket[nsessions];
+	int i, r, open_count = 0;
+	for (i = 0; i < nsessions; i++){
+		r = g_psock[i].connect(g_phost, 0, 30, bisTCP);
+		printf("[%d]: connect return: %d\n", i, r);
+		if (r >= 0){
+			printf("peer ip: %s\n", g_psock[i].get_peer_ip(b));
+			printf("self ip: %s\n", g_psock[i].get_self_ip(b));
+			open_count++;
+		}
+	}
 
-	if (r >= 0){
+	if (open_count > 0){
 	xsys_thread h1;
 	h1.init(recv_show, 0);
 
 	xsys_sleep_ms(10);
 
-//	r = recv_data();
-
 	try{
-		char b[1024*4];
-		printf("peer ip: %s\n", g_sock.get_peer_ip(b));
-		printf("self ip: %s\n", g_sock.get_self_ip(b));
-
 		nsends = nrecvs = 0;
-		while (is_run && g_sock.isopen()){
+		r = 0;
+		for (i = 0; i < nsessions; i++)
+			if (g_psock[i].isopen())  ++r;
+		open_count = r;
+
+		while (is_run && open_count > 0){
 			// putchar('>');
             cin.getline(b, sizeof(b));
 
 			if (strcmp(b, "exit") == 0)
 				break;
 
-            r = strlen(b);
+			i = 0;
+			const char * p = b;
+			if (nsessions > 1 && (p = strchr(b, ':')) && (r = int(p - b)) < 5 && r > 0){
+				if (-isdigits(b) == r + 1){
+					i = atoi(b) - 1;
+					if (i < 0){
+						i = 0;  p = b;
+					}else
+						++p;
+				}
+			}
+
+            r = strlen(p);
 			if (bisBIN){
-				r = x_hex2array((unsigned char *)sendbuf, b, r);
-				r = g_sock.send(sendbuf, r);
+				r = x_hex2array((unsigned char *)sendbuf, p, r);
+				r = g_psock[i].send(sendbuf, r);
 			}else{
-				r = c2string(b, b);
-				r = g_sock.send(b, r);
+				r = c2string(b, p);
+				r = g_psock[i].send(b, r);
 			}
 
 			xsys_sleep_ms(800);
@@ -198,15 +210,15 @@ void main(int argc, char **argv)
                 break;
 			}
             nsends += r;
-//			r = recv_data();
 		}
 	}catch(...){
 		printf("some error occured.\n");
 	}
 
-	g_sock.close();
+	for (i = 0; i < nsessions; i++)
+		g_psock[i].close();
 	h1.down();
-
+	xsys_sleep(3);
 	}else{
 		printf("%s\n", xlasterror());
 	}
@@ -240,23 +252,52 @@ static unsigned int recv_show(void * pvoid)
 
 	printf("recver: start.\n");
 
-	int l = 1;
-	while (l > 0 || g_sock.isopen()){
-//		if (bisTCP){
-			l = g_sock.recv(aline, sizeof(aline), -1);
-//		}else
-//			l = g_sock.recv_from(aline, sizeof(aline), ip, -1);	// this is ok, but unnecessary.
-		if (l <= 0)
+	fd_set fdsr;
+	struct timeval tv;
+
+	int l = 1, i, n, r;
+	while (l > 0){
+		FD_ZERO(&fdsr);
+		for (i = n = 0; i < nsessions; i++)
+			if (g_psock[i].isopen()){
+				FD_SET(g_psock[i].m_sock, &fdsr);
+				if (n < int(g_psock[i].m_sock))
+					n = int(g_psock[i].m_sock);
+			}
+
+		tv.tv_sec  = 30;
+		tv.tv_usec = 0;
+		r = ::select(n+1, &fdsr, NULL, NULL, &tv);
+
+		if (r == 0)  continue;
+
+		if (r < 0)
 			break;
 
-        aline[l] = 0;
-		if (bisBIN){
-			write_buf_log("RECV", (unsigned char *)aline, l);
-		}else{
-			putchar('<');  puts(aline);
-		}
+		for (i = n = 0; i < nsessions; i++){
+			if (!g_psock[i].isopen())
+				continue;
 
-		nrecvs += l;
+			if (!FD_ISSET(g_psock[i].m_sock, &fdsr))
+				continue;
+
+			l = SysRecvData(g_psock[i].m_sock, aline, sizeof(aline)-1, 100);
+			FD_CLR(g_psock[i].m_sock, &fdsr);
+
+			if (l < 0){
+				g_psock[i].close();  continue;
+			}
+
+			aline[l] = 0;
+			printf("%d <-:\n", i+1);
+			if (bisBIN){
+				write_buf_log("RECV", (unsigned char *)aline, l);
+			}else{
+				puts(aline);
+			}
+
+			nrecvs += l;
+		}
 	}
 	xsys_sleep_ms(100);
 

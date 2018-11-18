@@ -62,15 +62,15 @@ public:
 	/// ttl : 通讯间隔, 超时则废弃
 	/// max_seesions : 最多在线会话数 不超过 1024
 	/// recv_len : 每次试图接收长度，最小 1024
-	bool open(int listen_port, int ttl, int max_sessions, int recv_len, int send_len);
-	bool open(const char * url,int ttl, int recv_len);
-	bool stop(int secs = 5);
-	bool close(int secs = 5);	/// 关闭释放
+	virtual bool open(int listen_port, int ttl, int max_sessions, int recv_len, int send_len);
+	virtual bool open(const char * url,int ttl, int recv_len);
+	virtual bool stop(int secs = 5);
+	virtual bool close(int secs = 5);	/// 关闭释放
 
 	/// 服务线程函数
 	void run(void);			/// 接收处理线程
-	void send_server(void);	/// 发送处理线程
 	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
+	virtual void send_server(void);	/// 发送处理线程
 
 	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
 	virtual int  do_msg(int i, char * msg, int msg_len) = 0;

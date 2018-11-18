@@ -74,7 +74,7 @@ char * xmail::finditem(const char * name, char * buf)
 void xmail::getitem(char * i)
 {
 	if (i) {
-		char * s = skipblanks(i);
+		const char * s = skipblanks(i);
 		if (*s == '"'){
 			getaword(i, s+1, "\"\r\n");
 		}else

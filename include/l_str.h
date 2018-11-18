@@ -39,8 +39,10 @@ const char *  getaword(char * d, const char * s, const char * seps);	/*!< È¡1µ¥´
 const char *  getaword(char * d, const char * s, const char * seps, const char * ends);	/*!< È¡1µ¥´Ê,Ö¸¶¨·Ö¸ô·û¼¯ºÍ½áÊø·û¼¯ºÏ,·µ»ØÏÂ¸öµ¥´Ê»ò½áÊø·ûµÄµØÖ· */
 const char *  getaword(char * d, const char * s, const char *p, int maxlen); /*!< È¡1µ¥´Ê,Ö¸¶¨·Ö¸ô·û¼¯,·µ»ØÏÂÒ»¸öµ¥´ÊµÄÆðÊ¼µØÖ· */
 
-char *  skipchs (char * s, const char * chars);	/*!< Ìø¹ýÖ¸¶¨×Ö·û¼¯ */
-char *  skipblanks(char * s);				/*!< Ìø¹ý¿Õ¸ñ */
+const char *  skipchs (const char * s, const char * chars);	/*!< Ìø¹ýÖ¸¶¨×Ö·û¼¯ */
+const char *  skip2chs(const char * s, const char * chars); /*!< Ìøµ½Ö¸¶¨×Ö·û¼¯ */
+const char *  skip2ch (const char * s, char ch);
+const char *  skipblanks(const char * s);				/*!< Ìø¹ý¿Õ¸ñ */
 
 int     endcmp    (const char * d, const char * e);		/*!< ±È½ÏdµÄÄ©Î²ÊÇ·ñÊÇe,½á¹ûÍ¬strcmp */
 

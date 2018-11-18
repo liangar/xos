@@ -24,6 +24,9 @@ typedef unsigned char  byte_t;	/*  8-bit unsigned integer */
 typedef unsigned char  uint8;	/* 8-bit unsigned integer */
 #endif
 
+extern const char hex_chars[17];
+inline void hex2chars(char * d, unsigned char h);
+
 int x_str2bcd(char * d, const char * s, int len);
 int x_str2bcdv(char * d, const char * s, int len);
 int x_bcd2str(char * d, const char * s, int len);

@@ -219,6 +219,8 @@ void xsys_tcp_server2::run(void)
 		if (!m_isrun)
 			break;
 
+		m_heartbeat = long(time(0));
+
 		if (ret == 0) {
 			++idle_times;
 
@@ -292,7 +294,7 @@ void xsys_tcp_server2::run(void)
 
 			switch (m_psessions[i].recv_state){
 			case XTS_RECVED:
-				WriteToEventLog("%s: <%d> - recved a packet data", szFunctionName, i);
+				WriteToEventLog("%s: <%d> - recved a packet data(len = %d)", szFunctionName, i, r);
 				// 将收到的完整包逐条发到request消息队列中
 				while (r <= m_psessions[i].recv_len){
 					// 发布
@@ -304,7 +306,8 @@ void xsys_tcp_server2::run(void)
 
 				break;
 			case XTS_RECV_ERROR:
-				WriteToEventLog("%s: %d - recv error", szFunctionName, i);
+				WriteToEventLog("%s: %d - recv error(%d)", szFunctionName, i, r);
+				write_buf_log(szFunctionName, (unsigned char *)m_psessions[i].precv_buf, m_psessions[i].recv_len);
 				i = session_close_used(j);
 				break;
 
@@ -466,10 +469,12 @@ bool xsys_tcp_server2::stop(int secs)
 	m_recv_queue.put(-1, "stop", 4);
 	xsys_sleep_ms(100);
 
+	bool isok = xwork_server::stop(secs);
+
+	xsys_sleep_ms(100);
+
 	m_send_thread.down();
 	m_msg_thread.down();
-
-	bool isok = xwork_server::stop(secs);
 
 	WriteToEventLog("%s: out(%d)", szFunctionName, isok);
 

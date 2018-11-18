@@ -205,7 +205,7 @@ static unsigned int recv_show(void * pvoid)
 
 		if (memcmp(&from_addr, &g_client_addr, sizeof(SYS_INET_ADDR)) != 0){
 			memcpy(&g_client_addr, &from_addr, sizeof(SYS_INET_ADDR));
-			SysInetNToA(g_client_addr, g_client_ip_port);
+			SysInetRevNToA(g_client_addr, g_client_ip_port, 32);
 			printf("peer ip: %s\n", g_client_ip_port);
 			g_nrecvs = 0;
 		}

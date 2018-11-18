@@ -106,16 +106,31 @@ const char *  getaword(char * d, const char * s, const char * seps, const char *
 }
 
 // +++
-char * skipchs (char * s, const char * chars)
+const char * skipchs (const char * s, const char * chars)
 {
 	if (!s)  return 0;
 	while (*s && strchr(chars, *s))  s++;
 	return s;
 }
 
-// +++
-char * skipblanks(char * s)
+const char * skip2chs (const char * s, const char * chars)
 {
+	if (!s)  return 0;
+	while (*s && !strchr(chars, *s))  s++;
+	return s;
+}
+
+const char * skip2ch (const char * s, char ch)
+{
+	if (!s)  return 0;
+	while (*s && *s != ch)  s++;
+	return s;
+}
+
+// +++
+const char * skipblanks(const char * s)
+{
+	if (!s)  return 0;
 	while (ISBLANKCH(*s))  s++;
 	return s;
 }
@@ -177,7 +192,7 @@ int trimstr(char * d, char * s)
 
 int	trim_head(char * d, char * s)
 {
-	s = skipblanks(s);
+	s = (char *)skipblanks(s);
 	return strmove(d, s);
 }
 
@@ -218,7 +233,7 @@ int	trim_all(char * d, char * s)
 		*d = '\0';  return 0;
 	}
 	int l;
-	s = skipblanks(s);
+	s = (char *)skipblanks(s);
 	if (*s == '\0'){
 		l = 0;
 	}else{
@@ -238,7 +253,7 @@ int	trim_all(char * d, char * s, char *blanks)
 	if (s == 0 || *s == '\0') {
 		*d = '\0';  return 0;
 	}
-	s = skipchs(s, blanks);
+	s = (char *)skipchs(s, blanks);
 	char * e = s + strlen(s) - 1;
 	while (e >= s && strchr(blanks, *e))  e--;
 	int l = int(e + 1 - s);
@@ -594,7 +609,6 @@ int string2c(char * d, const char * s)
 const char * strin(const char * str_array, const char * sfind)
 {
 	const char * p;
-	int l;
 	for (p = str_array; *p; p += strlen(p) + 1){
 		if (strcmp(sfind, p) == 0)
 			return p;
@@ -605,7 +619,6 @@ const char * strin(const char * str_array, const char * sfind)
 const char * striin(const char * str_array, const char * sfind)
 {
 	const char * p;
-	int l;
 	for (p = str_array; *p; p += strlen(p) + 1){
 		if (stricmp(sfind, p) == 0)
 			return p;

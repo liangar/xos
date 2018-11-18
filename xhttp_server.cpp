@@ -57,7 +57,7 @@ int http_recv_all(
 				len += r;
 				d[len] = 0; // 设置字符串结尾
 				pend = strstr(startpos, "\r\n\r\n");	// 查找
-			}else if (r < 0)
+			}else if (r <= 0)
 				return r;
 		}
 
@@ -80,7 +80,12 @@ int http_recv_all(
 	// recv the rest data
 	int will_recv_length = min(maxlen, header_len + data_len);
 	int rest_len = will_recv_length - len;
-	r = sock.recv_all(d+len, rest_len, 10*1000);
+	if (rest_len > 0){
+		r = sock.recv_all(d+len, rest_len, 10*1000);
+	}else
+		r = 0;
+
+	d[r+len] = 0;
 
 	return r+len;
 }
@@ -94,22 +99,82 @@ int http_date(char * d, long t)
 static const char * post_json_header_format =
 "POST %s HTTP/1.1\r\n"
 "Accept: application/json, */*\r\n"
-"Content-Type: application/json; charset=utf-8\r\n"
+"Content-Type: %s; charset=utf-8\r\n"
 "Accept-Language: en-US,en;q=0.8,zh-Hans-CN;q=0.6,zh-Hans;q=0.4,bo-Tibt;q=0.2\r\n"
 "Accept-Encoding: deflate\r\n"
 "Host: %s\r\n"
-"Content-Length: %d\r\n"
+"Content-Length: %d\r\n";
+
+static const char * post_json_header_format_tail =
 "Connection: Keep-Alive\r\n"
 "Cache-Control: no-cache\r\n"
 "User-Agent: KTAMR Http client 1.0.1\r\n\r\n"
 ;
 
-int http_encode_post_json_header(char * d, const char * url, int data_len)
-{
-	n_url	U;
-	parseurl(&U, url);
+static n_url s_http_URL;
+static const char * s_content_type,
+	* XHTTP_CONTENT_TYPE_JSON	= "application/json",
+	* XHTTP_CONTENT_TYPE_NORMAL = "application/x-www-form-urlencoded";
 
-	return sprintf(d, post_json_header_format, U.http.path, U.http.host, data_len);
+int http_post_init(const char * url)
+{
+	s_content_type = XHTTP_CONTENT_TYPE_JSON;
+
+	ZeroData(s_http_URL);
+	return parseurl(&s_http_URL, url);
+}
+
+int  http_post_init(const char * ip_port, const char * path)
+{
+	s_content_type = XHTTP_CONTENT_TYPE_JSON;
+
+	ZeroData(s_http_URL);
+	s_http_URL.n_type = urlhttp;
+	strcpy(s_http_URL.http.host, ip_port);
+	strcpy(s_http_URL.http.path, path);
+	return 0;
+}
+
+void http_set_post_content_type(int content_type)
+{
+	switch(content_type){
+		case XSYSHT_CONTENT_TYPE_NORMAL:  s_content_type = XHTTP_CONTENT_TYPE_NORMAL;  break;
+		case XSYSHT_CONTENT_TYPE_JSON  :  s_content_type = XHTTP_CONTENT_TYPE_JSON;    break;
+		default:
+			s_content_type = XHTTP_CONTENT_TYPE_JSON;  break;
+	}
+}
+
+int http_encode_post_json_header(
+		char * d, int data_len, const char * expand_parms
+	)
+{
+	int head_len = sprintf(d,
+		post_json_header_format,
+		s_http_URL.http.path, s_content_type, s_http_URL.http.host, data_len
+	);
+
+	int len = strlen(expand_parms);
+	if (len > 0){
+		memcpy(d+head_len, expand_parms, len);
+		memcpy(d+head_len+len, "\r\n", 2);
+		head_len += len + 2;
+	};
+
+	len = strlen(post_json_header_format_tail);
+	memcpy(d+head_len, post_json_header_format_tail, len+1);
+
+	return (head_len+len);
+}
+
+int http_encode_post_json_header(
+		char * d, const char * url, int data_len, const char * expand_parms
+	)
+{
+	if (http_post_init(url) < 0)
+		return -1;
+
+	return http_encode_post_json_header(d, data_len, expand_parms);
 }
 
 int http_encode_post_json_packet(char * d, const char * url, const char * pdata)
@@ -123,11 +188,11 @@ int http_encode_post_json_packet(char * d, const char * url, const char * pdata)
 
 static const char * phttp_response_json_header_format =
 "HTTP/1.1 %03d %s\r\n"
-"Date: %s\r\n"
-"Server: KTAMR Http Server 1.0.1\r\n"
-"Cache-Control: private, max-age=0\r\n"
 "Content-Type: application/json; charset=utf-8\r\n"
-"Content-Length: %d\r\n\r\n"
+"Content-Length: %d\r\n"
+"Cache-Control: private, max-age=0\r\n"
+"Server: XHttp FastCGI Server 1.0.1\r\n"
+"Date: %s\r\n\r\n"
 ;
 
 int http_encode_response_json_packet(char * d, int response_code, const char * pdata)
@@ -143,9 +208,9 @@ int http_encode_response_json_packet(char * d, int response_code, const char * p
 	int datalen = strlen(pdata);
 	int len = sprintf(d,
 		phttp_response_json_header_format,
-		response_code, presult_msg, date, datalen
+		response_code, presult_msg, datalen, date
 	);
-	strcpy(d+len, pdata);
+	memcpy(d+len, pdata, datalen+1);
 
 	return len + datalen;
 }
@@ -172,8 +237,7 @@ bool xhttp_server::close(int secs)
 int xhttp_server::calc_msg_len(int i)
 {
 	xhttp_session_ext * pext = m_pexts + i;
-	if (pext->overall_len > 0)
-		return pext->overall_len;
+	pext->header_len = pext->content_len = pext->overall_len = 0;
 
 	xtcp2_session *	psession = m_psessions + i;
 
@@ -203,14 +267,141 @@ int xhttp_server::calc_msg_len(int i)
 	// get content length
 	char content_len[16];
 	int r = http_get_prop(content_len, "Content-Length", d);
+	// restore the end ch
+	d[pext->header_len] = endch;
+
 	if (r <= 0)
 		return -1;
 
 	pext->content_len = atoi(content_len);
-	pext->overall_len = pext->header_len + pext->overall_len;
-
-	// restore the end ch
-	d[pext->header_len] = endch;
+	pext->overall_len = pext->header_len + pext->content_len;
+	
+	if (pext->overall_len > m_recv_len)
+		return -2;
 
 	return pext->overall_len;
+}
+
+static int json_skip_name_to_colon(const char * s, const char * name, int maxlen)
+{
+	if (maxlen < 1)
+		return -1;
+
+	// find & skip the name and blanks until arrived the ':'
+	int len = strlen(name);
+	const char * pstart = s;
+	do{
+		s = strstr(s, name);	// find the name;
+		if (s == 0)
+			return -2;
+		if (s > pstart && !ISBLANKCH(s[-1]) && !IS_XHT_SPECHARS(s[-1]) ||
+			!IS_XHT_SPECHARS(s[len])
+			)
+		{
+			++s;
+			continue;
+		}
+
+		s += len;
+		while (*s && strchr(" \t\r\n", *s) && strchr("\":", *s) == NULL)  s++;
+	}while(int(s - pstart) < maxlen && *s && *s != '"' && *s != ':');
+
+	if (int(s - pstart) >= maxlen)
+		return -2;
+
+	if (*s == '"'){
+		s = skipblanks(s+1);
+	}
+	if (*s != ':')
+		return -3;
+
+	return int(s - pstart);
+}
+
+int json_get_value(char * v, const char * name, const char * s, int maxlen)
+{
+	if (v == 0 || maxlen < 1)
+		return -1;
+
+	*v = 0;
+
+	int len = json_skip_name_to_colon(s, name, maxlen);
+	if (len < 0)
+		return len;
+
+	s = skipblanks(s+len+1);
+	const char * e = s;
+	if (*s == '"')
+		e = skip2ch(++s, '"');
+	else if (*s == '{')
+		e = skip2ch(++s, '}');
+	else
+		e = skip2chs(s, " \t,\r\n");
+	
+	maxlen = min(maxlen-1, int(e - s));
+	memcpy(v, s, maxlen);  v[maxlen] = 0;
+
+	return maxlen;
+}
+
+int json_get_value(char * v, const char * name, xhttp_session &s)
+{
+	return json_get_value(v, name, s.presponse_data, s.response_content_len);
+}
+
+int xhttp_perform(xhttp_session &s)
+{
+	static const char szFunctionName[] = "xhttp_perform";
+
+	int r;
+	if (!s.sock.isopen()){
+		r = s.sock.connect(s.ip_port);
+		if (r != 0){
+			WriteToEventLog("%s: 连接(%s)出错(%d)", szFunctionName, s.ip_port, r);
+			return -1;
+		}
+	}
+
+	// login header
+	http_post_init(s.ip_port, s.path);
+	http_set_post_content_type(s.content_type);
+	// login packet
+	int header_len = http_encode_post_json_header(
+		s.prequest_buf, s.request_data_len, s.expand_parms
+	);
+	memmove(s.prequest_buf+header_len, s.prequest_data, s.request_data_len+1);
+
+	int len = header_len + s.request_data_len;
+	WriteToEventLog("%s: len = %d\n%s\n", szFunctionName, len, s.prequest_buf);
+
+	r = 0;
+	int i;
+	for (i = 0; i < 3 && r <= 0; i++){
+		if (r == 0){
+			r = s.sock.send_all(s.prequest_buf, len);
+			if (r == len)
+				r = http_recv_all(
+					s.presponse_buf, s.response_code, s.response_header_len, s.sock,
+					s.response_max_len
+				);
+			else
+				r = 0;
+		}
+		if (r <= 0){
+			s.sock.close();
+			r = s.sock.connect(s.ip_port);
+		}
+	}
+
+	if (r > 0){
+		s.response_content_len = r - s.response_header_len;
+		s.presponse_data = s.presponse_buf + s.response_header_len;
+		WriteToEventLog(
+			"%s: get [%s] response\nr = %d, response_code = %d(%d,%d)\n%s\n",
+			szFunctionName, s.path, r, s.response_code, s.response_header_len, s.response_content_len, s.presponse_buf
+		);
+	}else
+		s.response_code = 503;
+	
+	return s.response_code;
 }

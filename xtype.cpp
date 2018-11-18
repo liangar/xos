@@ -3,6 +3,13 @@
 
 #include <xtype.h>
 
+const char hex_chars[17] = "0123456789ABCDEF";
+inline void hex2chars(char * d, unsigned char h)
+{
+	d[0] = hex_chars[((h & 0xF0) >> 4)];
+	d[1] = hex_chars[((h & 0x0F))];
+}
+
 /// str -> bcd
 /// "0123456789" -> 0x01 0x23 0x45 0x67 0x89
 int x_str2bcd(char * d, const char * s, int len)
@@ -218,7 +225,7 @@ void x_long2nt(unsigned char * d, long v, int bytes)
 {
 	switch(bytes){
 		case 3: x_long2nt3(d, v); break;
-		case 2: x_short2nt(d, v);  break;
+		case 2: x_short2nt(d, (unsigned short)v);  break;
 		case 1: d[0] = (unsigned char)v;  break;
 		default: x_long2nt(d, v);  break;
 	}
@@ -228,7 +235,7 @@ void x_long2ntv(unsigned char * d, long v, int bytes)
 {
 	switch(bytes){
 		case 3: x_long2nt3v(d, v); break;
-		case 2: x_short2ntv(d, v);  break;
+		case 2: x_short2ntv(d, (unsigned short)v);  break;
 		case 1: d[0] = (unsigned char)v;  break;
 		default: x_long2ntv(d, v);  break;
 	}
@@ -269,11 +276,12 @@ static int x_hex2long(char c)
 
 /// "1A2B3C4D" -> 0x1A 0x2B 0x3C 0x4D
 /// "1A2B3C4D5" -> 0x1A 0x2B 0x3C 0x4D 0x05
+/// @len lt decode bytes, return real decode bytes
 int x_hex2array(unsigned char * d, const char * s, int len)
 {
 	int l, i, j;
 
-	memset(d, 0, (len+1)/2);
+//	memset(d, 0, (len+1)/2);
 
 	l = strlen(s);
 	for (i = j = 0; s[i] != '\0' && i+1 < l;) {
@@ -296,7 +304,12 @@ int x_hex2array(unsigned char * d, const char * s, int len)
 	}
 //	printf("\n");
 
-	return j;
+	l = (len+1)/2;
+	if (l > j)
+		memset(d+j, 0, l-j);
+	else
+		l = j;
+	return l;
 }
 
 /// "1A2B3C4D" -> 0xA1 0xB2 0xC3 0xD4
@@ -337,7 +350,8 @@ int x_array2hex(char * d, const unsigned char * s, int len)
 	int l = (len + 1) / 2;
 	int i, j;
 	for (i = j = 0; i < l; i++){
-		sprintf(d+j, "%02X", s[i]);  j += 2;
+		hex2chars(d+j, s[i]);
+		j += 2;
 	}
 	d[len] = 0;
 

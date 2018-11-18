@@ -213,7 +213,7 @@ char * getpathfile(const char * filename, char * fullFileName, char *outPath, ch
 
 void writetoeventlog(int wType, int dwID, char const * pFormat, va_list v)
 {
-    char s[512];
+    char s[1024];
 
 	if (time(0) - prev_time > t_idle){
 		EL_WriteNow();

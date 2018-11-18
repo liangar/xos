@@ -64,9 +64,9 @@ bool xsys_log::reopen(void)
 	
 	r = bak();
 	
-	FILE * hlogfile = fopen(m_file_name, "w+");
+	FILE * hlogfile = fopen(m_file_name, "wb+");
 	if (hlogfile == NULL){
-		hlogfile = fopen(m_file_name, "w+");
+		hlogfile = fopen(m_file_name, "wb+");
 	}
 	m_hlogfile = hlogfile;
 	

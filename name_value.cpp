@@ -59,7 +59,7 @@ int name_value::merge(const char * s)
 				goto parse_error;
 
 			trim_all(pcomment, pcomment);
-			pvalue = skipblanks((char *)(p + 1));
+			pvalue = (char *)skipblanks(p + 1);
 		}else if (*p == '='){
 			pvalue = (char *)p;
 			* pcomment = '\0';
