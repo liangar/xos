@@ -1,6 +1,14 @@
 #ifndef _SS_SERVICE_H_
 #define _SS_SERVICE_H_
 
+#ifdef WIN32
+	#include <sal.h>
+#else
+	#ifndef _Printf_format_string_
+		#define _Printf_format_string_
+	#endif
+#endif
+
 void set_run_path(const char * p);	/*!< 设置当前工作目录 */
 char * get_run_path();				/*!< 取得当前工作目录 */
 
@@ -90,8 +98,8 @@ int  flushservicelog(void);
 
 void writetoeventlog(int wType, int dwID, char const * pFormat, va_list v);	/*!< 写日值文件,自动打印换行 */
 void WriteToEventLog(int wEventType, int dwEventID, char const * pFormat, ...);/*!< 写日值文件,自动打印换行 */
-void WriteToEventLog(char const * pFormat, ...);	/*!< 写日值文件,用法同printf,自动打印换行 */
-void WriteToFileLog(const char * logfile, char const * pFormat, ...); /*!< 写指定日值文件 */
+void WriteToEventLog(_Printf_format_string_ char const * pFormat, ...);	/*!< 写日值文件,用法同printf,自动打印换行 */
+void WriteToFileLog(const char * logfile, _Printf_format_string_ char const * pFormat, ...); /*!< 写指定日值文件 */
 
 void terminatethread(void * &hthread, int seconds = 3000, int returncode = 0); /*!< 停止线程 */
 void getfullname(char * pbuf, const char * pfilename, int maxlen);	/*!< 取得文件的全目录字符串 */

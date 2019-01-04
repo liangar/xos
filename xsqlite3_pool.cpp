@@ -88,8 +88,8 @@ xsqlite3 * xsqlite3_pool::open(void)
 {
 	static const char szFunctionName[] = "xsqlite3_pool::open";
 
-	if (m_mutex.lock(300) != 0){
-		sprintf(m_lastmsg, "%s: lock(300) path error", szFunctionName);
+	if (m_mutex.lock(3000) != 0){
+		sprintf(m_lastmsg, "%s: lock(3000) path error", szFunctionName);
 		return 0;
 	}
 
@@ -193,7 +193,7 @@ unsigned int xsqlite3_pool::schedule(void * data)
 
 	int t = 0;
 	while (p->m_estop.wait(p->m_idle) == ERR_TIMEOUT){
-		if (p->m_mutex.lock(300))
+		if (p->m_mutex.lock(3000))
 			continue;
 
 		for (int i = 0; i < p->m_list.m_count; i++){

@@ -1,5 +1,27 @@
 #include <xsys_tcp_server2.h>
 
+static unsigned int run_send_thread(void * ptcp_server)
+{
+	try{
+		xsys_tcp_server2 * pserver = (xsys_tcp_server2 *)ptcp_server;
+		pserver->send_server();
+	}catch(...){
+		WriteToEventLog("xsys_tcp_server2::send_server: an exception occured.");
+	}
+	return 0;
+}
+
+static unsigned int run_msg_thread(void * ptcp_server)
+{
+	try{
+		xsys_tcp_server2 * pserver = (xsys_tcp_server2 *)ptcp_server;
+		pserver->msg_server();
+	}catch(...){
+		WriteToEventLog("xsys_tcp_server2::msg_server: an exception occured.");
+	}
+	return 0;
+}
+
 xsys_tcp_server2::xsys_tcp_server2()
 	: xwork_server("XTCP2 Server", 5, 1)
 	, m_listen_port(0)
@@ -125,54 +147,35 @@ bool xsys_tcp_server2::open(const char * url,int ttl, int recv_len)
 	return open(0, ttl, 32, recv_len, 2048);
 }
 
-static unsigned int run_send_thread(void * ptcp_server)
-{
-	try{
-		xsys_tcp_server2 * pserver = (xsys_tcp_server2 *)ptcp_server;
-		pserver->send_server();
-	}catch(...){
-		WriteToEventLog("xsys_tcp_server2::send_server: an exception occured.");
-	}
-	return 0;
-}
-
-static unsigned int run_msg_thread(void * ptcp_server)
-{
-	try{
-		xsys_tcp_server2 * pserver = (xsys_tcp_server2 *)ptcp_server;
-		pserver->msg_server();
-	}catch(...){
-		WriteToEventLog("xsys_tcp_server2::msg_server: an exception occured.");
-	}
-	return 0;
-}
-
 void xsys_tcp_server2::run(void)
 {
 	static const char szFunctionName[] = "xsys_tcp_server2::run";
 
 	WriteToEventLog("%s : in.\n", szFunctionName);
 
-	xsys_sleep(3);
+	// 启动发送线程
+	if (m_send_thread.m_thread == SYS_INVALID_THREAD)
+		m_send_thread.init(run_send_thread, this);
+
+	if (m_msg_thread.m_thread == SYS_INVALID_THREAD)
+		m_msg_thread.init(run_msg_thread, this);
+	
+	xsys_sleep_ms(500);
+	// wait the other worker in ready
+	// xsys_sleep_ms(100);
+
+	int	session_i = 0;		/// 循环查找起始位置
+
+	int i, conn_amount = 0, n, idle_times = 0, trytimes = 0;
+	int not_full_packet_count = 0;
 
 	if (!m_listen_sock.isopen() && m_listen_sock.listen(m_listen_port) != 0){
 		WriteToEventLog("%s : 创建消息监听(%d)失败，退出运行", szFunctionName, m_listen_port);
 		return;
 	}
 
-	// 启动发送线程
-	m_send_thread.init(run_send_thread, this);
-	m_msg_thread.init(run_msg_thread, this);
-
-	// wait the other worker in ready
-	xsys_sleep_ms(100);
-
-	int	session_i = 0;		/// 循环查找起始位置
-
 	fd_set fdsr;
 	struct timeval tv;
-
-	int i, conn_amount = 0, n, idle_times = 0, trytimes = 0;
 
 	while (m_isrun && trytimes < 3 && m_listen_sock.isopen()) {
 		// 检查关闭连接请求
@@ -212,6 +215,8 @@ void xsys_tcp_server2::run(void)
 		if (ret < 0) {
 			WriteToEventLog("%s: select error(%d), loop end", szFunctionName, ret);
 			++trytimes;
+			m_listen_sock.close();
+			m_idle = 3;
 			break;
 		}
 		trytimes = 0;
@@ -249,9 +254,7 @@ void xsys_tcp_server2::run(void)
 					WriteToEventLog("%s: <%d> timeout[%d](%d - %d)", szFunctionName, i, m_session_ttl, int(m_psessions[i].createTime), m_heartbeat);
 
 					session_close_used(j);
-				}
-				
-				if (50 < m_heartbeat - m_psessions[i].last_trans_time){
+				}else if (m_session_ttl / 2 + 1 < m_heartbeat - m_psessions[i].last_trans_time){
 					do_idle(i);
 					session_recv_reset(i);
 				}
@@ -277,24 +280,36 @@ void xsys_tcp_server2::run(void)
 
 			// receive data
 			m_precv_buf[len] = '\0';
-			WriteToEventLog("%s: client[%d, len=%d]", szFunctionName, i, len);
+			WriteToEventLog("%s: client[%d/sock=%d, len=%d]", szFunctionName, i, sock, len);
 			session_recv(i, len);	// 将数据存入session的临时缓存
 			m_psessions[i].recv_state = XTS_RECVING;
 
 			// 检查接收状态
 			// 返回首个完整包的应有长度，0 < 为非协议包
 			int r = calc_msg_len(i);
+			WriteToEventLog("%s: %d <- %d/%d bytes recved", szFunctionName,
+				m_psessions[i].sock,
+				m_psessions[i].recv_len, r
+			);
 			if (r <= 0){
 				// 无效或无用数据，则释放
 				m_psessions[i].recv_state = XTS_RECV_ERROR;
 			}else{
 				if (r <= m_psessions[i].recv_len)
 					m_psessions[i].recv_state = XTS_RECVED;
+				else{
+					if ((not_full_packet_count & 0x0F) == 0){
+						write_buf_log("不完整包", (unsigned char *)m_precv_buf, len);
+						++not_full_packet_count;
+					}
+				}
 			}
 
 			switch (m_psessions[i].recv_state){
 			case XTS_RECVED:
-				WriteToEventLog("%s: <%d> - recved a packet data(len = %d)", szFunctionName, i, r);
+				WriteToEventLog("%s: <%d/%d> - recved a packet data(len = %d)", szFunctionName,
+					i, m_psessions[i].sock, r
+				);
 				// 将收到的完整包逐条发到request消息队列中
 				while (r <= m_psessions[i].recv_len){
 					// 发布
@@ -302,11 +317,11 @@ void xsys_tcp_server2::run(void)
 						break;
 					r = calc_msg_len(i);
 				}
-				WriteToEventLog("%s: <%d> - send packet to recver", szFunctionName, i);
+				WriteToEventLog("%s: <%d/%d> - send packet to recver", szFunctionName, i, m_psessions[i].sock);
 
 				break;
 			case XTS_RECV_ERROR:
-				WriteToEventLog("%s: %d - recv error(%d)", szFunctionName, i, r);
+				WriteToEventLog("%s: %d/%d - recv error(%d)", szFunctionName, i, m_psessions[i].sock, r);
 				write_buf_log(szFunctionName, (unsigned char *)m_psessions[i].precv_buf, m_psessions[i].recv_len);
 				i = session_close_used(j);
 				break;
@@ -354,7 +369,7 @@ void xsys_tcp_server2::msg_server(void)
 {
 	static const char szFunctionName[] = "xsys_tcp_server2::msg_server";
 
-	WriteToEventLog("%s : in", szFunctionName);
+	WriteToEventLog("%s : in/%d", szFunctionName, m_recv_len);
 
 	char * ptemp_buf = (char *)calloc(1, m_recv_len+1);
 
@@ -364,7 +379,7 @@ void xsys_tcp_server2::msg_server(void)
 
 		/// 取出数据
 		int len = m_recv_queue.get_free((long *)(&isession), ptemp_buf);
-		if (!m_isrun || (isession == -1 && len == 4))
+		if (!m_isrun || (isession == -1 && len == 4 && memcmp(ptemp_buf, "stop", 4) == 0))
 			break;
 
 		if (len <= 0){
@@ -380,7 +395,7 @@ void xsys_tcp_server2::msg_server(void)
 		/// 调用处理函数进行消息处理
 		int r = do_msg(isession, ptemp_buf, len);
 
-		WriteToEventLog("%s : <%d>处理%d长的数据，返回%d", szFunctionName, isession, len, r);
+		WriteToEventLog("%s : <%d/%d>处理%d长的数据，返回%d", szFunctionName, isession, m_psessions[isession].sock, len, r);
 	}
 
 	::free(ptemp_buf);
@@ -400,7 +415,7 @@ void xsys_tcp_server2::send_server(void)
 
 	xsys_sleep(1);
 
-	while (m_isrun && m_listen_sock.isopen()){
+	while (m_isrun){
 		int i_session = -1;
 
 		int len = m_send_queue.get_free((long *)&i_session, ptemp_buf);
@@ -408,7 +423,7 @@ void xsys_tcp_server2::send_server(void)
 		if (!m_isrun || (i_session == -1 && len == 4))
 			break;
 
-		if (len < 0){
+		if (len <= 0){
 			continue;
 		}
 
@@ -460,13 +475,14 @@ bool xsys_tcp_server2::stop(int secs)
 	m_isrun = false;
 
 	m_listen_sock.close();
-	xsys_sleep_ms(100);
+	xsys_sleep_ms(300);
 
-	// notify send/recv thread stop
-	m_send_queue.put(-1, "stop", 4);
-	xsys_sleep_ms(100);
-
+	// notify recver stop
 	m_recv_queue.put(-1, "stop", 4);
+	xsys_sleep_ms(100);
+
+	// notify sender thread stop
+	m_send_queue.put(-1, "stop", 4);
 	xsys_sleep_ms(100);
 
 	bool isok = xwork_server::stop(secs);
@@ -518,7 +534,9 @@ void xsys_tcp_server2::session_open(int i)
 {
 	xtcp2_session * psession = m_psessions + i;
 
-	memset(psession+sizeof(SYS_SOCKET), 0, sizeof(xtcp2_session)-sizeof(SYS_SOCKET));
+	SYS_SOCKET sock = psession->sock;
+	memset(psession, 0, sizeof(xtcp2_session));
+	psession->sock = sock;
 
 	psession->createTime = time(0);
 	psession->last_trans_time = long(psession->createTime);

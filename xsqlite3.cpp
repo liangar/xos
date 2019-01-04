@@ -56,14 +56,14 @@ void xsqlite3::getconnect_string(char ** d)
 // open and close
 int xsqlite3::open(const char * szconnectionstring)
 {
-    if (szconnectionstring == NULL && m_pconnection == NULL)
+	if ((szconnectionstring == NULL || *szconnectionstring == 0) && m_pconnection == NULL)
         return XSQL_ERROR_PARAM;
 
 	if (m_pdb != 0 && close() != 0)
-			return XSQL_ERROR;
+		return XSQL_ERROR;
 
 	// update m_pconnection
-	{
+	if (szconnectionstring && *szconnectionstring){
         int l = strlen(szconnectionstring) + 1;
         m_pconnection = (char *)realloc(m_pconnection, l);
         strcpy(m_pconnection, szconnectionstring);
@@ -118,7 +118,7 @@ int xsqlite3::trans_end(bool isok)
     if (m_pdb == NULL)  return XSQL_ERROR;
 
 	if (m_db_lock)
-		m_db_lock->lock(300);
+		m_db_lock->lock(3000);
 
 	if (isok)
 		n = sqlite3_exec(m_pdb, "COMMIT", 0, 0, 0);

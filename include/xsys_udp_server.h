@@ -54,6 +54,8 @@ public:
 	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
 
 	void notify_do_cmd(const char * cmd = 0);
+	void sign_new_cmd (bool has_new = true);
+	bool has_new_cmd(void);
 
 	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
 	virtual int  do_msg(int i, char * msg, int msg_len) = 0;	/// 处理消息
@@ -82,7 +84,7 @@ public:
 	int notify_close_session(int i, bool need_shift = true);
 
 protected:
-	void timeout_check(void);
+//	void timeout_check(void);
 	int opened_find(int * crc, SYS_INET_ADDR * addr);
 
 	void session_open(int i);
@@ -98,21 +100,24 @@ protected:
 	void close_all_session(void);
 
 protected:
-	xudp_session *	m_psessions;	/// 保存各个连接(已经建立的连接)
-	int 	  * m_pused_index;	/// 保存正在使用的连接
-	int 		m_used_count;		/// 正在使用的数量
+	xudp_session *	m_psessions;	/// 会话
+	int 		*m_pused_index; 	/// 正在使用的连接
+	volatile int m_used_count;		/// 正在使用的数量
 	int			m_session_count;
 
 	xseq_buf	m_recv_queue;	/// 保存提交数据(循环队列)
 	xseq_buf	m_send_queue;	/// 保存发送数据
 	xseq_buf	m_close_requests; 	/// 关闭通知
 
-	bool		m_has_new_cmd;	/// 有新消息
+	volatile bool	m_has_new_cmd;	/// 标志：有新消息
 
 protected:
-	int			m_listen_port;	/// 端口
+	volatile int	m_listen_port;	/// 端口
 	char		m_serverURL[64];/// 服务端的URL地址
-	xsys_socket m_listen_sock;
+
+	xsys_socket * m_plisten_sock;
+	xsys_mutex	m_sock_lock;
+
 	int 		m_session_ttl;	/// 超时时间(秒)
 	int			m_recv_len;		/// 每次接收的最大长度
 	int 		m_send_len; 	/// 每次发送最大值

@@ -172,7 +172,7 @@ static int get_t_prop(char **p)
 {
     int i = 0;  char * t, * q;  int l;
 
-    *p = s;
+    *p = q = s;
     while (goto_char('<')){
         q = get_p();
         if (skip_b_blank() != '/')  continue;

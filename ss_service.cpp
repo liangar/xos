@@ -11,7 +11,6 @@ static xsys_log s_log;
 
 static FILE * hlogfile = NULL;
 static bool   bdebug = true;
-static time_t prev_time = 0;
 static long   t_idle = 60;
 static char   run_path[MAX_PATH];
 
@@ -36,9 +35,10 @@ void terminatethread(void * &hthread, int seconds, int returncode)
 
 void getfullname(char * pbuf, const char * pfilename, int maxlen)
 {
-	if (strchr(pfilename, '\\') != 0 || strchr(pfilename, '/') != 0)
-		strncpy(pbuf, pfilename, maxlen);
-	else{
+	if (strchr(pfilename, '\\') != 0 || strchr(pfilename, '/') != 0){
+		strncpy(pbuf, pfilename, maxlen-1);
+		pbuf[maxlen-1] = 0;
+	}else{
 		char p[MAX_PATH];
 		if (run_path[0]){
 #ifdef WIN32
@@ -47,9 +47,10 @@ void getfullname(char * pbuf, const char * pfilename, int maxlen)
 			sprintf(p, "%s/%s", run_path, pfilename);
 #endif
 		}else{
-			strncpy(p, pfilename, MAX_PATH);
+			strncpy(p, pfilename, MAX_PATH-1);  p[MAX_PATH-1] = 0;
 		}
-		strncpy(pbuf, p, maxlen);
+		strncpy(pbuf, p, maxlen-1);
+		pbuf[maxlen-1] = 0;
 	}
 }
 
@@ -213,23 +214,22 @@ char * getpathfile(const char * filename, char * fullFileName, char *outPath, ch
 
 void writetoeventlog(int wType, int dwID, char const * pFormat, va_list v)
 {
+	static time_t prev_time = 0;
+
     char s[1024];
 
-	if (time(0) - prev_time > t_idle){
+	time_t now = time(0);
+	if (now - prev_time > t_idle)
 		EL_WriteNow();
-		prev_time = time(0);
-	}
 
     SysVSNPrintf(s, sizeof(s)-1, pFormat, v);  s[sizeof(s)-1] = '\0';
 
 	s_log.write_aline(s);
-	/*
-	EL_puts(s);
-	EL_puts("\n");
-	if (hlogfile){
-		fflush(hlogfile);
+
+	if (now - prev_time > t_idle){
+		s_log.flush();
+		prev_time = now;
 	}
-	//*/
 }
 
 void WriteToEventLog(int wEventType, int dwEventID, char const * pFormat, ...)
@@ -294,7 +294,8 @@ char * getsimple_now(char *d)
 char * time2string(char * d, long t)
 {
 	struct tm *ltime;
-    ltime = localtime((const time_t*)&t);
+	time_t tt = (time_t)t;
+    ltime = localtime(&tt);
 	sprintf(d, "%04d-%02d-%02d %02d:%02d:%02d", 1900 + ltime->tm_year, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour, ltime->tm_min, ltime->tm_sec);
 	return d;
 }
@@ -395,7 +396,8 @@ char * string2simple(char *d, char *s, bool bendflag)
 char * time2simple(char * d, long t)
 {
 	struct tm *ltime;
-    ltime = localtime((const time_t*)&t);
+	time_t tt = (time_t)t;
+    ltime = localtime(&tt);
 	sprintf(d, "%04d%02d%02d%02d%02d%02d", 1900 + ltime->tm_year, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour, ltime->tm_min, ltime->tm_sec);
 	return d;
 }
@@ -403,7 +405,8 @@ char * time2simple(char * d, long t)
 char * time2simpledate(char *d, long t)
 {
 	struct tm *ltime;
-    ltime = localtime((const time_t*)&t);
+	time_t tt = (time_t)t;
+    ltime = localtime(&tt);
 	sprintf(d, "%04d%02d%02d", 1900 + ltime->tm_year, ltime->tm_mon + 1, ltime->tm_mday);
 	return d;
 }
@@ -515,7 +518,7 @@ long getnextimebyminute(char * hhmm) {
 		}
 	}
 
-	long r = (long(mktime(&tt)) - now) / 60;
+	long r = long(mktime(&tt) - now) / 60;
 	if (0 >= r) {
 		r += 24 * 60;
 	}
@@ -928,7 +931,8 @@ long dt_to_daybegin(long t)
 {
 	struct tm tnow;
 
-	memcpy(&tnow, localtime((time_t *)&t), sizeof(struct tm));
+	time_t tt = (time_t)t;
+	memcpy(&tnow, localtime((time_t *)&tt), sizeof(struct tm));
 	tnow.tm_hour = 0;
 	tnow.tm_min  = 0;
 	tnow.tm_sec  = 0;
@@ -977,40 +981,45 @@ long dt_today(void)  {
 	return dt_gettoday();  
 }
 
-long dt_year(long t)
+long dt_year(long tt)
 {
 	struct tm tnow;
 
-	memcpy(&tnow, localtime((time_t *)&t), sizeof(struct tm));
+	time_t t = (time_t)tt;
+	memcpy(&tnow, localtime(&t), sizeof(struct tm));
 	return tnow.tm_year+1900;
 }
 
-long dt_month(long t)
+long dt_month(long tt)
 {
 	struct tm tnow;
 
-	memcpy(&tnow, localtime((time_t *)&t), sizeof(struct tm));
+	time_t t = (time_t)tt;
+	memcpy(&tnow, localtime(&t), sizeof(struct tm));
 	return tnow.tm_mon + 1;
 }
 
-long dt_day(long t)
+long dt_day(long tt)
 {
 	struct tm tnow;
 
-	memcpy(&tnow, localtime((time_t *)&t), sizeof(struct tm));
+	time_t t = (time_t)tt;
+	memcpy(&tnow, localtime(&t), sizeof(struct tm));
 	return tnow.tm_mday;
 }
 
-long dt_hour(long t) {
+long dt_hour(long tt) {
 	struct tm tnow;
 
-	memcpy(&tnow, localtime((time_t *) &t), sizeof(struct tm));
+	time_t t = (time_t)tt;
+	memcpy(&tnow, localtime(&t), sizeof(struct tm));
 	return tnow.tm_hour;
 }
-long dt_minute(long t) {
+long dt_minute(long tt) {
 	struct tm tnow;
 
-	memcpy(&tnow, localtime((time_t *) &t), sizeof(struct tm));
+	time_t t = (time_t)tt;
+	memcpy(&tnow, localtime(&t), sizeof(struct tm));
 	return tnow.tm_min;
 }
 

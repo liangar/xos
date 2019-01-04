@@ -271,6 +271,9 @@ void xsys_tcp_server::send_server(void)
 		// find session
 		int i = use.id;
 		if (i < 0 || i > m_session_count || !m_psessions[i].sock.isopen()){
+			if (memcmp(use.p, "stop", 4) == 0)
+				break;
+
 			WriteToEventLog("%s: 出错,试图在未打开的会话上发送(%d len=%d)\n%s", szFunctionName, i, use.len, use.p);
 		}else{
 			r = m_psessions[i].sock.send_all(use.p, use.len);
@@ -366,6 +369,7 @@ bool xsys_tcp_server::stop(int secs)
 	m_isrun = false;
 
 	m_listen_sock.close();
+	m_sends.put(-1, "stop", 4);
 	bool isok = xwork_server::stop(secs);
 
 	if (m_psessions){
@@ -430,7 +434,7 @@ void xsys_tcp_server::session_close(xtcp_session * psession)
 {
 	static const char szFunctionName[] = "xsys_tcp_server::session_close";
 
-	m_lock.lock(3);
+	m_lock.lock(3000);
 	if (psession->sock.isopen())
 		psession->sock.close();
 
@@ -476,7 +480,7 @@ void xsys_tcp_server::session_close(int i)
 		return;
 	}
 
-	m_lock.lock(3);
+	m_lock.lock(3000);
 	psession->recv_state = XTS_SESSION_END;
 	psession->send_state = XTS_SESSION_END;
 	m_lock.unlock();

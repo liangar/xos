@@ -67,12 +67,13 @@ static int MscGetServerAddress(char const *purl, SYS_INET_ADDR & SvrAddr, int ip
 		}
 	}
 
-	NET_ADDRESS NetAddr;
+	int r;
+	SysInetAnySetup(SvrAddr, AF_INET, iport);
 
-	if ((SysInetAddr(&url[0], NetAddr) < 0) && (SysGetHostByName(&url[0], NetAddr) < 0))
-		return (ErrGetErrorCode());
+	if ((r = SysGetHostByName((const char *)url, AF_INET, SvrAddr)) < 0)
+		return r;
 
-	SysSetupAddress(SvrAddr, AF_INET, NetAddr, port);
+	SysSetAddrPort(SvrAddr, port);
 
 	return (0);
 }

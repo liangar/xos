@@ -66,11 +66,11 @@ public:
 	/// 与上级的通讯区
 	int		m_maxexception;		/// 最多可容忍的异常次数
 	int		m_exceptiontimes;	/// 实际发生的异常次数
-    long	m_heartbeat;		/// 心跳的click,可以判断服务是否在运行
+    volatile long	m_heartbeat;		/// 心跳的click,可以判断服务是否在运行
 	long    m_run_times;        /// 服务运行的次数
 
 	int		m_works;			/// 服务线程数
-	int		m_idle;				/// 正常运行轮循间隔时间
+	volatile int		m_idle;				/// 正常运行轮循间隔时间
 
 	char	m_createtime[32];	/// 创建时间
 	char	m_laststart[32];	/// 最近启动时间
@@ -88,7 +88,7 @@ public:
 	char		m_parms[256];	/// 通知命令的参数
 
 	char		m_lastmsg[256];	/// 最近消息
-	bool	m_isrun;	/// 线程
+	volatile bool	m_isrun;	/// 线程
 
 protected:
 	void clear_notify(void);

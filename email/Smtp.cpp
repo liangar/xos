@@ -1243,7 +1243,7 @@ int CSmtp::SendData(CSmtpMessage &msg)
 	if ((nRet = msg.Parse(strMsg)) < 0){
 		SendCmd("RSET\r\n");
 
-		WriteToEventLog("%s: Parse error(%d)", nRet);
+		WriteToEventLog("%s: Parse error(%d)", szFunctionName, nRet);
 		return -1;
 	}
 	strMsg += "\r\n.\r\n";
@@ -1252,7 +1252,7 @@ int CSmtp::SendData(CSmtpMessage &msg)
 	nRet = SendCmd("DATA\r\n");
 	if (nRet != 354)
 	{
-		WriteToEventLog("%s: Send DATA command error (%d)", nRet);
+		WriteToEventLog("%s: Send DATA command error (%d)", szFunctionName, nRet);
 		return nRet;
 	}
 

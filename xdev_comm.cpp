@@ -182,7 +182,7 @@ int xdev_comm::recv_byend(char * buf, int maxlen, char * endstr, int seconds)
 	if (i > 0 && m_use_full_log)
 		EL_WriteHexString(buf, i);
 
-	if (strstr(buf, endstr) == 0)
+	if (endstr && *endstr && strstr(buf, endstr) == 0)
 		return ERR_TIMEOUT;
 
 	return i;
@@ -254,7 +254,7 @@ int xdev_comm::recv(char *buf, int len, int msec)
 
 void xdev_comm::lock(void)
 {
-	m_buf_lock.lock(300);
+	m_buf_lock.lock(2000);
 }
 
 void xdev_comm::unlock(void)

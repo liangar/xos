@@ -266,8 +266,8 @@ int	trim_all(char * d, char * s, char *blanks)
 
 int	trim_all(char * d, char * s, char blank)
 {
-	if (s == 0 || *s == '\0') {
-		*d = '\0';  return 0;
+	if (s == 0 || *s == '\0' || d == 0) {
+		if (d) *d = '\0';  return 0;
 	}
 	while (*s == blank)  s++;
 	char * e = s + strlen(s) - 1;

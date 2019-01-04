@@ -126,7 +126,7 @@ public:
 	 * \param seconds 超时秒数,如果<=0,则为无限
 	 * \return 0/ERR_TIMEOUT=有事件/超时
 	 */
-	int  lock(int seconds);
+	int  lock(int ms);
 	int  unlock(void);		/*!< 解锁 */
 	int  trylock(void);		/*!< 测试是否可以加锁 */
 
@@ -244,6 +244,7 @@ public:
 	int connect(const char * lphostname, int nportnumber = 0, int timeout = 30, bool is_tcp = true);
 
 	void close(void);	/*!< 关闭 */
+	int shutdown(void);/*!< 强行关闭 */
 	int isopen(void);	/*!< 是否打开 */
 
 	const char * get_peer_ip(char * ip);

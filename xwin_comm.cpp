@@ -424,7 +424,7 @@ void test_serial_port(char * b)
 				"\n");
 			continue;
 		}
-		int r;
+		int r = 0;
 		switch(b[0]){
 		case 'o':
 			r = pport->open(b+2);

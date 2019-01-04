@@ -117,7 +117,7 @@ void test_tcp_client(char * b)
 				"\n");
 			continue;
 		}
-		int r;
+		int r = 0;
 		switch(b[0]){
 			case 'o':
 				r = pclient->open(b+2);

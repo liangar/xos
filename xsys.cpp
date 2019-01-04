@@ -3,18 +3,29 @@
 #include <ss_service.h>
 
 bool bServerDebug;
+static bool bsys_inited = false;
 
 int xsys_init(bool bDebug)
 {
+	if (bsys_inited)
+		return 0;
+
 	bServerDebug = bDebug;
-	return SysInitLibrary();
+	int r = SysInitLibrary();
+	if (r == 0)
+		bsys_inited = true;
+	return r;
 }
 
 void xsys_down(void)
 {
-	xsys_shutdown();
-	xsys_sleep_ms(100);
-	xsys_cleanup();
+	if (bsys_inited){
+		xsys_shutdown();
+		xsys_sleep_ms(100);
+		xsys_cleanup();
+		
+		bsys_inited = false;
+	}
 }
 
 xsys_event::xsys_event()
@@ -493,6 +504,19 @@ void xsys_socket::close(void)
 	m_isserver = 0;
 }
 
+int xsys_socket::shutdown(void)
+{
+	int r = 0;
+	if (isopen()) {
+		// printf("xsys_socket::close %d\n", int(m_sock));
+		r = SysShutdownSocket(m_sock, SD_BOTH);
+		m_sock = SYS_INVALID_SOCKET;
+	}	// else
+        // printf("xsys_socket::close null socket\n");
+	m_isserver = 0;
+	return r;
+}
+
 int xsys_socket::isopen(void)
 {
 	if (m_sock != SYS_INVALID_SOCKET) {
@@ -590,7 +614,7 @@ int xsys_socket::sendto(const char * buf, int len, const SYS_INET_ADDR *pto_addr
 
 	int sent_bytes = 0;
 	while (sent_bytes < len){
-		int current_snd = SysSendDataTo(m_sock, pto_addr, buf, len-sent_bytes, timeout_ms);
+		int current_snd = ::sendto(m_sock, buf, len-sent_bytes, 0, (const struct sockaddr *)pto_addr->Addr, sizeof(sockaddr));
 		if (current_snd < 0)
 			break;
 		sent_bytes += current_snd;
@@ -640,8 +664,7 @@ int xsys_socket::recv_byend(char ** p, const char * endstr, int steplen, int tim
 	int i = 0, r, len = 2 * steplen;
 
 	*p = 0;
-	char * q = (char *)malloc(len);
-	memset(q, 0, len);
+	char * q = (char *)calloc(len, 1);
 
 	if (timeout < 0){
 		timeout = SYS_INFINITE_TIMEOUT;

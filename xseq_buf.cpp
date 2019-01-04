@@ -53,7 +53,7 @@ int xseq_buf::init(int bufsize, int uses)
 
 bool xseq_buf::clear(void)
 {
-	if (m_hmutex->lock(1000) != 0)
+	if (m_hmutex->lock(2000) != 0)
 		return false;
 
 	if (m_uses.isempty()){
@@ -91,7 +91,7 @@ bool xseq_buf::isempty(void)
 {
 	bool b;
 
-	m_hmutex->lock(1000);
+	m_hmutex->lock(2000);
 	b = m_uses.isempty();
 	m_hmutex->unlock();
 
@@ -102,7 +102,7 @@ bool xseq_buf::isfull(void)
 {
 	bool b;
 
-	m_hmutex->lock(1000);
+	m_hmutex->lock(2000);
 	b = m_uses.isfull();
 	m_hmutex->unlock();
 
@@ -239,7 +239,7 @@ int xseq_buf::get(xseq_buf_use * use)
 	if (m_psem->P(m_timeout_ms) != 0)
 		return -1;
 
-	m_hmutex->lock(1000);
+	m_hmutex->lock(2000);
 
 	if (m_uses.isempty()){
 		m_hmutex->unlock();
@@ -265,7 +265,7 @@ int xseq_buf::get_free(long * id, char * pdata)
 	if (r != 0)
 		return r;
 
-	m_hmutex->lock(1000);
+	m_hmutex->lock(2000);
 
 	if (m_uses.isempty()){
 		m_hmutex->unlock();

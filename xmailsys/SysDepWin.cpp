@@ -300,7 +300,7 @@ int SysSetupSocketBuffers(int *piSndBufSize, int *piRcvBufSize)
 	return 0;
 }
 
-static int SysSetSocketsOptions(SYS_SOCKET SockFD)
+static int SysSetSocketsOptions(SYS_SOCKET SockFD, int iType)
 {
 	/* Set socket buffer sizes */
 	if (iSndBufSize > 0) {
@@ -323,18 +323,28 @@ static int SysSetSocketsOptions(SYS_SOCKET SockFD)
 		ErrSetErrorCode(ERR_SETSOCKOPT);
 		return ERR_SETSOCKOPT;
 	}
-	/* Disable linger */
-	struct linger Ling;
+	
+	if (iType == SOCK_STREAM){
+		/* Disable linger */
+		struct linger Ling;
 
-	ZeroData(Ling);
-	Ling.l_onoff = 0;
-	Ling.l_linger = 0;
+		ZeroData(Ling);
+		Ling.l_onoff = 0;
+		Ling.l_linger = 0;
 
-	setsockopt(SockFD, SOL_SOCKET, SO_LINGER, (char const *) &Ling, sizeof(Ling));
+		setsockopt(SockFD, SOL_SOCKET, SO_LINGER, (char const *) &Ling, sizeof(Ling));
 
-	/* Set KEEPALIVE if supported */
-	setsockopt(SockFD, SOL_SOCKET, SO_KEEPALIVE, (char const *) &iActivate,
-		   sizeof(iActivate));
+		/* Set KEEPALIVE if supported */
+		setsockopt(SockFD, SOL_SOCKET, SO_KEEPALIVE, (char const *) &iActivate,
+			   sizeof(iActivate));
+	}else{
+		BOOL bNewBehavior = FALSE;
+		DWORD dwBytesReturned = 0;
+		WSAIoctl(
+			SockFD, SIO_UDP_CONNRESET,
+			&bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL
+		);
+	}
 
 	return 0;
 }
@@ -348,7 +358,7 @@ SYS_SOCKET SysCreateSocket(int iAddressFamily, int iType, int iProtocol)
 		ErrSetErrorCode(ERR_SOCKET_CREATE);
 		return SYS_INVALID_SOCKET;
 	}
-	if (SysSetSocketsOptions((SYS_SOCKET) SockFD) < 0) {
+	if (SysSetSocketsOptions((SYS_SOCKET) SockFD, iType) < 0) {
 		SysCloseSocket((SYS_SOCKET) SockFD);
 		return SYS_INVALID_SOCKET;
 	}
@@ -497,9 +507,37 @@ int SysRecv(SYS_SOCKET SockFD, char *pszBuffer, int iBufferSize, int iTimeout)
 	return iRtxBytes;
 }
 
+static int sys_get_wsa_error(void)
+{
+	DWORD dwResult = WSAGetLastError();
+	if (dwResult == WSAETIMEDOUT){
+		ErrSetErrorCode(ERR_TIMEOUT);
+		return ERR_TIMEOUT;
+	}
+
+	int r = int(dwResult);
+	if (r > 0)
+		return -r;
+	return r;
+}
+
 int SysRecvDataFrom(SYS_SOCKET SockFD, SYS_INET_ADDR *pFrom, char *pszBuffer,
 		    int iBufferSize, int iTimeout)
 {
+	DWORD	dwTimeout = DWORD(iTimeout);
+	setsockopt(SockFD, SOL_SOCKET, SO_RCVTIMEO, (const char *)&dwTimeout, sizeof(dwTimeout));
+
+	int addr_size = sizeof(sockaddr);
+	int r = ::recvfrom(SockFD, pszBuffer, iBufferSize, 0, (sockaddr *)pFrom->Addr, &addr_size);
+
+	if (r == SOCKET_ERROR) {
+		r = sys_get_wsa_error();
+	}
+	pFrom->iSize = (int)addr_size;
+
+	return r;
+	
+/*
 	HANDLE hReadEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 
 	if (hReadEvent == NULL) {
@@ -542,22 +580,32 @@ int SysRecvDataFrom(SYS_SOCKET SockFD, SYS_INET_ADDR *pFrom, char *pszBuffer,
 			pFrom->iSize = (int) FromLen;
 			break;
 		}
-		if (WSAGetLastError() != WSAEWOULDBLOCK) {
+		DWORD dwResult = WSAGetLastError();
+		if (dwResult != WSAEWOULDBLOCK) {
 			CloseHandle(hReadEvent);
 			ErrSetErrorCode(ERR_NETWORK);
-			return ERR_NETWORK;
+
+			int r = int(dwResult);
+			if (r > 0)
+				return -r;
+			return r;
 		}
-		/* You should never get here if Win32 API worked fine */
+		// You should never get here if Win32 API worked fine
 		HANDLE_SOCKS_SUCKS();
 	}
 	CloseHandle(hReadEvent);
 
 	return (int) dwRtxBytes;
+//*/
 }
 
 int SysSendData(SYS_SOCKET SockFD, char const *pszBuffer, int iBufferSize, int iTimeout)
 {
-	return ::send(SockFD, pszBuffer, iBufferSize, 0);
+	int r = ::send(SockFD, pszBuffer, iBufferSize, 0);
+	if (r == SOCKET_ERROR) {
+		r = sys_get_wsa_error();
+	}
+	return r;
 }
 
 int SysSend(SYS_SOCKET SockFD, char const *pszBuffer, int iBufferSize, int iTimeout)
@@ -718,7 +766,7 @@ SYS_SOCKET SysAccept(SYS_SOCKET SockFD, SYS_INET_ADDR *pSockName, int iTimeout)
 	if (SockFDAccept != INVALID_SOCKET) {
 		pSockName->iSize = (int) iNameLen;
 		if (SysBlockSocket(SockFDAccept, 0) < 0 ||
-		    SysSetSocketsOptions(SockFDAccept) < 0) {
+		    SysSetSocketsOptions(SockFDAccept, SOCK_STREAM) < 0) {
 			SysCloseSocket(SockFDAccept);
 			return SYS_INVALID_SOCKET;
 		}
@@ -1319,6 +1367,7 @@ int SysLockFile(char const *pszFileName, char const *pszLockExt)
 	char szLockFile[SYS_MAX_PATH];
 
 	SysSNPrintf(szLockFile, sizeof(szLockFile) - 1, "%s%s", pszFileName, pszLockExt);
+	szLockFile[sizeof(szLockFile) - 1] = 0;
 
 	/* Try to create lock file */
 	HANDLE hFile = CreateFile(szLockFile, GENERIC_READ | GENERIC_WRITE,
@@ -1353,6 +1402,8 @@ int SysUnlockFile(char const *pszFileName, char const *pszLockExt)
 	char szLockFile[SYS_MAX_PATH] = "";
 
 	SysSNPrintf(szLockFile, sizeof(szLockFile) - 1, "%s%s", pszFileName, pszLockExt);
+	szLockFile[SYS_MAX_PATH-1] = 0;
+
 	if (_unlink(szLockFile) != 0) {
 		ErrSetErrorCode(ERR_NOT_LOCKED);
 		return ERR_NOT_LOCKED;
@@ -1653,6 +1704,8 @@ char *SysGetEnv(char const *pszVarName)
 
 	SysSNPrintf(szRKeyPath, sizeof(szRKeyPath) - 1, "SOFTWARE\\%s\\%s",
 		    APP_PRODUCER, szServerName);
+	szRKeyPath[sizeof(szRKeyPath) - 1] = 0;
+
 	if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, szRKeyPath, 0, KEY_QUERY_VALUE,
 			 &hKey) == ERROR_SUCCESS) {
 		char szKeyValue[2048] = "";

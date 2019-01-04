@@ -141,15 +141,24 @@ bool xlist<T>::insert(T * h, int i)
 {
 	if (h == 0)  return true;
 
-	if (i >= m_count)
+	if (i > m_count)
 		i = m_count;
 
 	if (m_all <= m_count){
 		if (!increate_a_step())
 			return false;
 	}
-	if (i < m_count)
-		memmove(m_phandles + i + 1, m_phandles + i, sizeof(T) * (m_count - i));
+	if (m_count == 0)
+		i = 0;
+	else{
+		if (i < 0)
+			i = 0;
+		else if (i > m_count - 1)
+			i = m_count;
+
+		if (i < m_count)
+			memmove(m_phandles + i + 1, m_phandles + i, sizeof(T) * (m_count - i));
+	}
 
 	memcpy(m_phandles + i, h, sizeof(T));
 	m_count ++;
