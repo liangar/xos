@@ -56,13 +56,12 @@ void getfullname(char * pbuf, const char * pfilename, int maxlen)
 
 void EL_puts(const char * s)
 {
-	/*
-	if (bdebug)
-		printf("%s", s);
-	if (hlogfile)
-		fputs(s, hlogfile);
-	//*/
 	s_log.write(s);
+}
+
+void EL_put_line(const char * s)
+{
+	s_log.write_aline(s);
 }
 
 bool openservicelog(const char * pfilename, bool b_in_debug, int idle, bool saveold, const char * bakpath)
@@ -723,7 +722,7 @@ char * simple2string(char * d, const char * s)
 			d[18] = '0';  d[17] = '0';
 		}
 		d[16] = ':';
-		if (l == 12){
+		if (l >= 12){
 			d[15] = s[11];  d[14] = s[10];
 		}else{
 			d[15] = '0';  d[14] = '0';
