@@ -33,7 +33,7 @@ int xseq_buf::init(int bufsize, int uses)
 		bufsize = 4;
 	bufsize *= 1024;
 
-	m_pbuf = (char *)malloc(bufsize);
+	m_pbuf = (char *)calloc(bufsize, 1);
 	if (m_pbuf == 0)
 		return -1;
 
@@ -69,7 +69,7 @@ int xseq_buf::down(void)
 {
 	m_uses.close();
 	if (m_pbuf){
-		free(m_pbuf);  m_pbuf = 0;
+		::free(m_pbuf);  m_pbuf = 0;
 		m_p_head_free = m_p_tail_free = 0;
 		m_buf_size = m_head_free_size = m_tail_free_size = 0;
 	}
