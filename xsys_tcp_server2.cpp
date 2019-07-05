@@ -1,6 +1,6 @@
 #include <xsys_tcp_server2.h>
 
-static unsigned int run_send_thread(void * ptcp_server)
+unsigned int xsys_tcp_server2::run_send_thread(void * ptcp_server)
 {
 	try{
 		xsys_tcp_server2 * pserver = (xsys_tcp_server2 *)ptcp_server;
@@ -11,7 +11,7 @@ static unsigned int run_send_thread(void * ptcp_server)
 	return 0;
 }
 
-static unsigned int run_msg_thread(void * ptcp_server)
+unsigned int xsys_tcp_server2::run_msg_thread(void * ptcp_server)
 {
 	try{
 		xsys_tcp_server2 * pserver = (xsys_tcp_server2 *)ptcp_server;
