@@ -209,6 +209,7 @@ bool xlist<T>::merge(xlist<T> * plist)
 		p = (T *)realloc(m_phandles, sizeof(T) * (n + m_nstep));
 		if (p == 0)
 			return false;
+		m_all = n + m_nstep;
 	}else
 		p = m_phandles;
 
@@ -216,7 +217,6 @@ bool xlist<T>::merge(xlist<T> * plist)
 
 	m_phandles = p;
 	m_count = n;
-	m_all = n + m_nstep;
 
 	return true;
 }
@@ -232,6 +232,7 @@ bool xlist<T>::merge(T * pTs, int nitems)
 		p = (T *)realloc(m_phandles, sizeof(T) * (n + m_nstep));
 		if (p == 0)
 			return false;
+		m_all = n + m_nstep;
 	}else
 		p = m_phandles;
 	
@@ -239,7 +240,6 @@ bool xlist<T>::merge(T * pTs, int nitems)
 	
 	m_phandles = p;
 	m_count = n;
-	m_all = n + m_nstep;
 	
 	return true;
 }
@@ -391,15 +391,19 @@ bool xlist_s<T>::merge(xlist_s<T> * plist)
 	if (plist->m_count == 0)  return true;
 
 	int n = m_count + plist->m_count;
-	T * p = (T *)realloc(m_phandles, sizeof(T) * (n + m_nstep));
-	if (p == 0)
-		return false;
+	T * p;
+	if (n > m_all){
+		p = (T *)realloc(m_phandles, sizeof(T) * (n + m_nstep));
+		if (p == 0)
+			return false;
+		m_all = n + m_nstep;
+	}else
+		p = m_phandles;
 
 	memcpy(p + m_count, plist->m_phandles, plist->m_count * sizeof(T));
 
 	m_phandles = p;
 	m_count = n;
-	m_all = n + m_nstep;
 
 	return true;
 }
@@ -574,6 +578,7 @@ bool xlist_p<T>::merge(xlist_p<T> * plist)
 	if (plist->m_count == 0)  return true;
 
 	int n = m_count + plist->m_count;
+
 	T * p = new T[n + m_nstep];
 	if (p == 0)
 		return false;
