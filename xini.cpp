@@ -43,9 +43,9 @@ long xini::get(const char * section, const char * keyname, long defaultvalue)
 	return long(ini_get_int(section, keyname, defaultvalue, m_file));
 }
 
-void xini::get(const char * section, const char * keyname, char * value, int maxlen, const char * defaultvalue)
+int xini::get(const char * section, const char * keyname, char * value, int maxlen, const char * defaultvalue)
 {
-	ini_get_string(section, keyname, defaultvalue, value, maxlen, m_file);
+	return ini_get_string(section, keyname, defaultvalue, value, maxlen, m_file);
 }
 
 long xini::set(const char * section, const char * keyname, long value)
