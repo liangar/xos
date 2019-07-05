@@ -105,6 +105,7 @@ void terminatethread(void * &hthread, int seconds = 3000, int returncode = 0); /
 void getfullname(char * pbuf, const char * pfilename, int maxlen);	/*!< 取得文件的全目录字符串 */
 
 void EL_puts(const char * s);					/*!< 写字符串到日值文件,无换行 */
+void EL_put_line(const char * s);				/*!< 写字符串到日值文件,换行 */
 void EL_WriteHexString(const char * s, int len);/*!< 写16进制字符串到日值文件 */
 void EL_WriteNow();	/*!< 写当前时间到日值文件 */
 void write_buf_log(const char * title, unsigned char * buf, int len);
