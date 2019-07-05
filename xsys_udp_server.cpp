@@ -5,6 +5,28 @@
 			 m_psessions[i].last_recv_time == m_psessions[i].createTime \
 			))
 
+static unsigned int run_send_thread(void * pudp_server)
+{
+	try{
+		xsys_udp_server * pserver = (xsys_udp_server *)pudp_server;
+		pserver->send_server();
+	}catch(...){
+		WriteToEventLog("xsys_udp_server::send_server: an exception occured.");
+	}
+	return 0;
+}
+
+static unsigned int run_msg_thread(void * pudp_server)
+{
+	try{
+		xsys_udp_server * pserver = (xsys_udp_server *)pudp_server;
+		pserver->msg_server();
+	}catch(...){
+		WriteToEventLog("xsys_udp_server::msg_server: an exception occured.");
+	}
+	return 0;
+}
+
 xsys_udp_server::xsys_udp_server()
 	: xwork_server("XUDP Server", 5, 1)
 	, m_listen_port(0)
@@ -65,7 +87,7 @@ int xsys_udp_server::session_close_used(int i_used)
 
 int xsys_udp_server::session_close_used_by_i(int i_session)
 {
-	if (i_session < 0 || i_session >= m_session_count)
+	if (!XUDPSESSION_INRANGE(i_session))
 		return i_session;
 
 	int i;
@@ -146,9 +168,15 @@ bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 			max_sessions += 4;
 	}
 
-	m_recv_queue.init(max( 4, (recv_len+1023) / 1024 * (max_sessions / 2) + 2), max(max_sessions, 4));
+	m_recv_queue.init(
+		(recv_len+1023) / 1024 * (max(16, (max_sessions / 8) + 8)),	// 最少16,最多大约1/4
+		max(max_sessions/2+16, 4)
+	);
 	m_listen_port = listen_port;
 	m_session_ttl = ttl;
+	m_session_idle = ttl / 4;
+	if (m_session_idle < 3)
+		m_session_idle = 3;
 
 	m_recv_len = recv_len;
 	if (m_recv_len < 1024)
@@ -162,8 +190,11 @@ bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 	xudp_session * p = m_psessions;
 
 	m_send_len = max(send_len, 32);
-	m_send_queue.init(max(4, send_len/1024*(max_sessions/5+2)), max(max_sessions/2+1, 4));
-	m_close_requests.init(4, max_sessions*8/1024+4);
+	m_send_queue.init(
+		(send_len+1023)/1024 * max(8, (max_sessions/16+4)),
+		max(max_sessions/16+4, 16)
+	);
+	m_close_requests.init(8, max_sessions/64+16);
 
 	WriteToEventLog("xsys_udp_server::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
 		m_session_ttl, max_sessions, m_recv_len, m_send_len
@@ -179,28 +210,6 @@ bool xsys_udp_server::open(const char * url,int ttl, int recv_len)
 {
 	strncpy(m_serverURL, url, sizeof(m_serverURL)-1);  m_serverURL[sizeof(m_serverURL)-1] = 0;
 	return open(0, ttl, 32, recv_len, 2048);
-}
-
-static unsigned int run_send_thread(void * pudp_server)
-{
-	try{
-		xsys_udp_server * pserver = (xsys_udp_server *)pudp_server;
-		pserver->send_server();
-	}catch(...){
-		WriteToEventLog("xsys_udp_server::send_server: an exception occured.");
-	}
-	return 0;
-}
-
-static unsigned int run_msg_thread(void * pudp_server)
-{
-	try{
-		xsys_udp_server * pserver = (xsys_udp_server *)pudp_server;
-		pserver->msg_server();
-	}catch(...){
-		WriteToEventLog("xsys_udp_server::msg_server: an exception occured.");
-	}
-	return 0;
 }
 
 void xsys_udp_server::run(void)
@@ -226,7 +235,7 @@ void xsys_udp_server::run(void)
 		m_msg_thread.init(run_msg_thread, this);
 
 	// wait the other worker in ready
-	xsys_sleep_ms(100);
+	xsys_sleep_ms(3000);
 
 	int idle_count = 0;
 	long time_check_time = long(time(0));
@@ -290,7 +299,7 @@ void xsys_udp_server::run(void)
 		SYS_INET_ADDR from_addr;
 		ZeroData(from_addr);
 		memset(m_precv_buf, 0, m_recv_len);
-		int len = m_plisten_sock->recv_from(m_precv_buf, m_recv_len-1, &from_addr, 2000);
+		int len = m_plisten_sock->recv_from(m_precv_buf, m_recv_len-1, &from_addr, 2200);
 
 		m_heartbeat = long(time(0));
 
@@ -355,7 +364,7 @@ void xsys_udp_server::run(void)
 				}else{
 					// 从最后的开始找
 					i = m_pused_index[m_used_count-1] + 1;
-					if (i < 1 || i >= m_session_count){
+					if (!XUDPSESSION_INRANGE(i)){
 						if (i < 1 || i > m_session_count)
 							WriteToEventLog("%s: 超出范围出错[%d]=%d", szFunctionName, --m_used_count, i);
 						i = 0;
@@ -468,7 +477,7 @@ void xsys_udp_server::msg_server(void)
 				}
 
 				r = 0;
-				if (isession < 0 || isession >= m_session_count){
+				if (!XUDPSESSION_INRANGE(isession)){
 					// 系统通知执行，或者出错
 					if (isession == -1){
 						if (strcmp(ptemp_buf, "stop") == 0)
@@ -558,7 +567,7 @@ void xsys_udp_server::send_server(void)
 			continue;
 		}
 
-		if (i_session < 0 || i_session >= m_session_count){
+		if (!XUDPSESSION_INRANGE(i_session)){
 			WriteToEventLog("%s: <%d>, len = %d, 超出会话界限,忽略", szFunctionName, i_session, len);
 			continue;
 		}
@@ -702,6 +711,8 @@ void xsys_udp_server::session_open(int i)
 
 	memset(psession, 0, sizeof(xudp_session));
 
+	psession->idle_secs = m_session_idle;
+
 	psession->createTime =
 		psession->last_recv_time  =
 		psession->last_trans_time = m_heartbeat;
@@ -742,7 +753,7 @@ int xsys_udp_server::notify_close_session(int i, bool need_shift)
 
 bool xsys_udp_server::session_isopen(int i)
 {
-	if (i < 0 || i >= m_session_count)
+	if (!XUDPSESSION_INRANGE(i))
 		return false;
 
 	xudp_session * psession = m_psessions + i;
@@ -753,7 +764,7 @@ void xsys_udp_server::session_close(int i)
 {
 	static const char szFunctionName[] = "xsys_udp_server::session_close";
 
-	if (i < 0 || i >= m_session_count){
+	if (!XUDPSESSION_INRANGE(i)){
 		WriteToEventLog("%s: i = %d is out range[0~%d]", szFunctionName, i, m_session_count);
 		return;
 	}
@@ -847,12 +858,22 @@ int xsys_udp_server::session_recv(int i, int len)
 	return l;
 }
 
-void xsys_udp_server::set_idle(int isession, int idle_secs)
+void xsys_udp_server::set_session_idle(int isession, int idle_secs)
 {
 	if (!PUDPSESSION_ISOPEN(m_psessions+isession))
 		return;
 
 	m_psessions[isession].idle_secs = idle_secs;
+}
+
+void xsys_udp_server::set_idle(int idle_secs)
+{
+	if (idle_secs > m_session_ttl)
+		m_idle = m_session_ttl - 3;
+	else if (idle_secs < 3)
+		m_idle = 3;
+	else
+		m_idle = idle_secs;
 }
 
 int xsys_udp_server::send(int isession, const char * s, int len)
@@ -888,17 +909,17 @@ void xsys_udp_server::notify_do_cmd(const char * cmd)
 
 void xsys_udp_server::sign_new_cmd(bool has_new)
 {
-	lock_prop(1);
+//	lock_prop(1);
 	m_has_new_cmd = has_new;
-	unlock_prop();
+//	unlock_prop();
 }
 
 bool xsys_udp_server::has_new_cmd(void)
 {
 	bool b;
-	lock_prop(1);
+//	lock_prop(1);
 	b = m_has_new_cmd;
-	unlock_prop();
+//	unlock_prop();
 	
 	return b;
 }
