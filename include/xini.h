@@ -18,7 +18,8 @@ public:
 	int open(const char * filename);
 
 	long get(const char * section, const char * keyname, long defaultvalue = 0);
-	void get(const char * section, const char * keyname, char * value, int maxlen = 128, const char * defaultvalue = "");
+	// return bytes
+	int  get(const char * section, const char * keyname, char * value, int maxlen = 128, const char * defaultvalue = "");
 	long set(const char * section, const char * keyname, long value);
 	const char * set(const char * section, const char * keyname, const char * value);
 
