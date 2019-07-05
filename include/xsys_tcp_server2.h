@@ -67,19 +67,6 @@ public:
 	virtual bool stop(int secs = 5);
 	virtual bool close(int secs = 5);	/// 关闭释放
 
-	/// 服务线程函数
-	void run(void);			/// 接收处理线程
-	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
-	virtual void send_server(void);	/// 发送处理线程
-
-	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
-	virtual int  do_msg(int i, char * msg, int msg_len) = 0;
-	virtual int  do_idle(int i) = 0;
-	
-	virtual bool on_opened	(int i);
-	virtual bool on_closed  (int i);
-	virtual bool on_sent	(int i, int len) = 0;	/// 发送完成
-
 	xseq_buf * get_recv_queue(void){
 		return &m_recv_queue;
 	}
@@ -96,6 +83,24 @@ public:
 
 	void session_close(int i);
 	bool session_isopen(int i);
+
+protected:
+	static unsigned int run_send_thread(void * ptcp_server);
+	static unsigned int run_msg_thread (void * ptcp_server);
+
+protected:
+	/// 服务线程函数
+	void run(void);			/// 接收处理线程
+	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
+	virtual void send_server(void);	/// 发送处理线程
+
+	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
+	virtual int  do_msg(int i, char * msg, int msg_len) = 0;
+	virtual int  do_idle(int i) = 0;
+	
+	virtual bool on_opened	(int i);
+	virtual bool on_closed  (int i);
+	virtual bool on_sent	(int i, int len) = 0;	/// 发送完成
 
 protected:
 	void timeout_check(void);
