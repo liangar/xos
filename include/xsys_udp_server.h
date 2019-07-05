@@ -2,6 +2,8 @@
 
 #include <xsys_tcp_server.h>
 
+#define PUDPSESSION_ISOPEN(p)	((p)->addr_crc != 0)
+
 struct xudp_session{
 	SYS_INET_ADDR	addr;	/// 通讯地址
 	int 	addr_crc;
@@ -22,10 +24,9 @@ struct xudp_session{
 	int		running_cmdid;
 };
 
-#define PUDPSESSION_ISOPEN(p)	((p)->addr_crc != 0)
-
 class xsys_udp_server : public xwork_server
 {
+#define XUDPSESSION_INRANGE(i)	(i >= 0 && i < m_session_count)
 public:
 	/// 构造
 	xsys_udp_server();
@@ -48,23 +49,6 @@ public:
 	bool stop(int secs = 5);
 	bool close(int secs = 5);	/// 关闭释放
 
-	/// 服务线程函数
-	void run(void);			/// 接收处理线程
-	void send_server(void);	/// 发送处理线程
-	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
-
-	void notify_do_cmd(const char * cmd = 0);
-	void sign_new_cmd (bool has_new = true);
-	bool has_new_cmd(void);
-
-	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
-	virtual int  do_msg(int i, char * msg, int msg_len) = 0;	/// 处理消息
-	virtual int  do_cmd(const char * cmd = 0) = 0;	/// 主动命令执行
-
-	virtual bool on_sent	(int i, int len) = 0;	/// 发送完成
-	virtual bool on_closed  (int i) = 0;
-	virtual int  do_idle	(int i) = 0;
-
 	xseq_buf * get_requests(void){
 		return &m_recv_queue;
 	}
@@ -74,7 +58,8 @@ public:
 		return m_psessions + i;
 	}
 
-	void set_idle(int isession, int idle_secs);
+	void set_session_idle(int isession, int idle_secs);
+	void set_idle(int idle_secs);
 
 	int send(int isession, const char * s, int len);
 	int send(int isession, const char * s);
@@ -82,6 +67,25 @@ public:
 	void session_close(int i);
 	bool session_isopen(int i);
 	int notify_close_session(int i, bool need_shift = true);
+
+	void notify_do_cmd(const char * cmd = 0);
+	void sign_new_cmd (bool has_new = true);
+	bool has_new_cmd(void);
+
+	/// 服务线程函数
+	void send_server(void);	/// 发送处理线程
+	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
+
+protected:
+	void run(void);			/// 接收处理线程
+
+	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
+	virtual int  do_msg(int i, char * msg, int msg_len) = 0;	/// 处理消息
+	virtual int  do_cmd(const char * cmd = 0) = 0;	/// 主动命令执行
+
+	virtual bool on_sent	(int i, int len) = 0;	/// 发送完成
+	virtual bool on_closed  (int i) = 0;
+	virtual int  do_idle	(int i) = 0;
 
 protected:
 //	void timeout_check(void);
@@ -119,6 +123,7 @@ protected:
 	xsys_mutex	m_sock_lock;
 
 	int 		m_session_ttl;	/// 超时时间(秒)
+	int 		m_session_idle;	/// 会话空闲时间
 	int			m_recv_len;		/// 每次接收的最大长度
 	int 		m_send_len; 	/// 每次发送最大值
 	char *		m_precv_buf;	/// 接收缓冲
