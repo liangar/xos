@@ -198,7 +198,7 @@ void main(int argc, char **argv)
 
             r = strlen(p);
 			if (bisBIN){
-				r = x_hex2array((unsigned char *)sendbuf, p, r);
+				r = x_hex2array((unsigned char *)sendbuf, p, 0);
 				r = g_psock[i].send(sendbuf, r);
 			}else{
 				r = c2string(b, p);
