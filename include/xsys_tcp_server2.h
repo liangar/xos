@@ -28,6 +28,8 @@ struct xtcp2_session{
 	int		peerid;			/// 连接对方的 id 标识, 给应用使用
 	time_t	createTime;		/// 建立连接的时间
 	long	last_trans_time;/// 最近通讯时间
+	long	last_recv_time;	/// 最近接收时间
+	int 	idle_secs;		/// 空闲秒数，到达空闲时间，执行on_idle
 
 	/// recv
 	XTS_STATES	recv_state;	/// 接收状态
@@ -80,6 +82,7 @@ public:
 	int send(int isession, const char * s);
 
 	int  notify_close_session(int i);
+	void notify_do_cmd(const char* cmd = 0);
 
 	void session_close(int i);
 	bool session_isopen(int i);
@@ -132,6 +135,7 @@ protected:
 	char		m_serverURL[64];/// 服务端的URL地址
 	xsys_socket m_listen_sock;	
 	int 		m_session_ttl;	/// 超时时间(秒)
+	int 		m_session_idle; /// 会话空闲时间
 	int			m_recv_len;		/// 每次接收的最大长度
 	int 		m_send_len; 	/// 每次发送最大值
 	char *		m_precv_buf;	/// 接收缓冲

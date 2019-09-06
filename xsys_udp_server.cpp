@@ -424,7 +424,7 @@ void xsys_udp_server::run(void)
 				r, len, m_psessions[i].recv_len
 			);
 			// 将收到的完整包逐条发到request消息队列中
-			while (r <= m_psessions[i].recv_len){
+			while (r > 0 && r <= m_psessions[i].recv_len){
 				// 发布
 				if ((len = session_recv_to_request(i, r)) <= 0)
 					break;
