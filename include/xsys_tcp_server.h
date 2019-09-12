@@ -54,18 +54,18 @@ public:
 	xsys_tcp_server();
 
 	/// 构造
-	/// \param name 服务名称,长度不超过128
-	/// \param dbstring 数据库连接串
+	/// \param name          服务名称,长度不超过128
 	/// \param nmaxexception 最多可容忍的异常次数
-	/// \param works 服务线程数
 	xsys_tcp_server(const char * name, int nmaxexception = 5);
 
 	virtual ~xsys_tcp_server(){};
 
-	/// 初始化服务
-	/// ttl : 通讯间隔, 超时则废弃
-	/// max_seesions : 最多在线会话数 不超过 1024
-	/// recv_len : 每次试图接收长度，最小 1024
+	/// 打开服务
+	/// \param listen_port  服务listen端口
+	/// \param ttl          通讯间隔, 超时则废弃
+	/// \param max_seesions 最多在线会话数,不超过 1024(目前用select)
+	/// \param recv_len     每次试图接收长度，最小 1024
+	/// \return 成功与否
 	bool open(int listen_port, int ttl, int max_sessions, int recv_len);
 	bool open(const char * url,int ttl, int recv_len);
 	bool stop(int secs = 5);
