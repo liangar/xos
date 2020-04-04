@@ -601,11 +601,59 @@ int SysRecvDataFrom(SYS_SOCKET SockFD, SYS_INET_ADDR *pFrom, char *pszBuffer,
 
 int SysSendData(SYS_SOCKET SockFD, char const *pszBuffer, int iBufferSize, int iTimeout)
 {
+	/*
 	int r = ::send(SockFD, pszBuffer, iBufferSize, 0);
 	if (r == SOCKET_ERROR) {
 		r = sys_get_wsa_error();
 	}
+
 	return r;
+//	*/	
+	
+	HANDLE hWriteEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+	if (hWriteEvent == NULL) {
+		ErrSetErrorCode(ERR_CREATEEVENT);
+		return ERR_CREATEEVENT;
+	}
+
+	int iSendBytes = 0;
+	HANDLE hWaitEvents[2] = { hWriteEvent, hShutdownEvent };
+
+	for (;;) {
+		WSAEventSelect(SockFD, (WSAEVENT) hWriteEvent, FD_WRITE | FD_CLOSE);
+
+		DWORD dwWaitResult = WSAWaitForMultipleEvents(2, hWaitEvents, FALSE,
+							      iTimeout, TRUE);
+
+		WSAEventSelect(SockFD, NULL, 0);
+
+		if (dwWaitResult == (WSA_WAIT_EVENT_0 + 1)) {
+			CloseHandle(hWriteEvent);
+			ErrSetErrorCode(ERR_SERVER_SHUTDOWN);
+			return ERR_SERVER_SHUTDOWN;
+		} else if (dwWaitResult != WSA_WAIT_EVENT_0) {
+			CloseHandle(hWriteEvent);
+			ErrSetErrorCode(ERR_TIMEOUT);
+			return ERR_TIMEOUT;
+		}
+
+		if ((iSendBytes = SysSendLL(SockFD, pszBuffer, iBufferSize)) >= 0)
+			break;
+
+		int iErrorCode = -iSendBytes;
+
+		if (iErrorCode != WSAEWOULDBLOCK) {
+			CloseHandle(hWriteEvent);
+			ErrSetErrorCode(ERR_NETWORK);
+			return ERR_NETWORK;
+		}
+		/* You should never get here if Win32 API worked fine */
+		HANDLE_SOCKS_SUCKS();
+	}
+	CloseHandle(hWriteEvent);
+
+	return iSendBytes;
 }
 
 int SysSend(SYS_SOCKET SockFD, char const *pszBuffer, int iBufferSize, int iTimeout)

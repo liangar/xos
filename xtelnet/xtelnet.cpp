@@ -29,6 +29,7 @@ static unsigned int recv_show(void * pvoid);
 
 char sendbuf[512];
 
+/*
 char * multichar_2_utf8(const char *s, int &len)
 {
 	// 计算由ansi转换为unicode后，unicode编码的长度
@@ -69,6 +70,8 @@ char * utf8_2_multichar(const char * s, int &len)
 
 	return psz_s;
 }
+
+//*/
 
 static int parse_args(int argc, char * argv[])
 {

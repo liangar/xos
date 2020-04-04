@@ -121,7 +121,7 @@ void xsys_tcp_server::run(void)
 			m_heartbeat = long(time(0));
 
 			// timeout setting
-			tv.tv_sec =  30;
+			tv.tv_sec =  10;
 			tv.tv_usec = 0;
 
 			// add active connection to fd set
@@ -172,25 +172,27 @@ void xsys_tcp_server::run(void)
 					continue;
 				}
 
-				ret = m_psessions[i].sock.recv(m_precv_buf, m_recv_len-1, 20);
+				SYS_SOCKET sock = m_psessions[i].sock.m_sock;
+				int len = SysRecvData(sock, m_precv_buf, m_recv_len-1, 100);
+				// int len = ::recv(sock, m_precv_buf, m_recv_len - 1, 0);
+				FD_CLR(sock, &fdsr);
 
-				FD_CLR(m_psessions[i].sock.m_sock, &fdsr);
-				if (ret < 0) {        // client close
-					WriteToEventLog("%s: client[%d] close, recv return [%d]", szFunctionName, i, ret);
+				if (len < 0) {        // client close
+					WriteToEventLog("%s: client[%d] close, recv return [%d]", szFunctionName, i, len);
 					session_close(i);
 					continue;
 				}
 
-				if (ret == 0){
-					WriteToEventLog("%s: warning, client[%d] recv return [%d]", szFunctionName, i, ret);
+				if (len == 0){
+					WriteToEventLog("%s: warning, client[%d] recv return [0]", szFunctionName, i);
 					session_close(i);
 					continue;
 				}
 
 				// receive data
-				m_precv_buf[ret] = '\0';
-				WriteToEventLog("%s: client[%d, len=%d]", szFunctionName, i, ret);
-				session_recv(i, ret);
+				m_precv_buf[len] = '\0';
+				WriteToEventLog("%s: client[%d, len=%d]", szFunctionName, i, len);
+				session_recv(i, len);
 				m_psessions[i].recv_state = XTS_RECVING;
 				check_recv_state(i);
 

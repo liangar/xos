@@ -79,7 +79,9 @@ public:
 protected:
 	void run(void);			/// 接收处理线程
 
-	virtual int  calc_msg_len(int i) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
+	virtual int  calc_msg_len(int isession) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
+	virtual int  calc_msg_len(int isession, char * pbuf, int len) = 0;
+
 	virtual int  do_msg(int i, char * msg, int msg_len) = 0;	/// 处理消息
 	virtual int  do_cmd(const char * cmd = 0) = 0;	/// 主动命令执行
 

@@ -1,9 +1,6 @@
 #include <xsys_tcp_server2.h>
 
-#define XSYS_TCP_SESSION_TIMEOUT(i) 	((m_session_ttl < m_heartbeat - m_psessions[i].last_recv_time) || \
-			(15 < m_heartbeat - m_psessions[i].last_recv_time && \
-			 m_psessions[i].last_recv_time == m_psessions[i].createTime \
-			))
+#define XSYS_TCP_SESSION_TIMEOUT(i) 	(m_session_ttl < m_heartbeat - m_psessions[i].last_recv_time)
 
 unsigned int xsys_tcp_server2::run_send_thread(void * ptcp_server)
 {
@@ -63,12 +60,12 @@ int xsys_tcp_server2::session_close_used(int i_used)
 
 	int i = m_pused_index[i_used];
 
-	WriteToEventLog("Close i_used=%d, <%d>", i_used, i);
+	WriteToEventLog("xsys_tcp_server2: Close i_used=%d, <%d>, used_count=%d", i_used, i, m_used_count);
 	session_close(i);
 
-	if (m_used_count > 0 && m_used_count > i_used + 1)
-		memmove(m_pused_index + i_used, m_pused_index+i_used+1, m_used_count-i_used-1);
 	--m_used_count;
+	if (m_used_count > i_used)	// 用于防护意外
+		memmove(m_pused_index + i_used, m_pused_index+i_used+1, (m_used_count-i_used)*sizeof(int));
 
 	return i;
 }
@@ -101,9 +98,7 @@ void xsys_tcp_server2::timeout_check(void)
 	for (i = 0; i < m_used_count && m_used_count > 0; i++){
 		int j = m_pused_index[i];
 
-		if ((m_session_ttl < m_heartbeat - m_psessions[j].last_trans_time) ||
-			(20 < m_heartbeat - m_psessions[j].last_trans_time && m_psessions[j].last_trans_time == m_psessions[j].createTime))
-		{
+		if (XSYS_TCP_SESSION_TIMEOUT(j)){
 			WriteToEventLog("%s: client[%d] timeout[%d/20](%d - %d)", szFunctionName, j, m_session_ttl, int(m_psessions[j].createTime), m_heartbeat);
 			session_close_used(i);
 		}
@@ -112,8 +107,6 @@ void xsys_tcp_server2::timeout_check(void)
 
 bool xsys_tcp_server2::open(int listen_port, int ttl, int max_sessions, int recv_len, int send_len)
 {
-	max_sessions += 4 + max_sessions / 8;
-
 	// 最多支持1K会话
 	if (max_sessions > 1024)
 		max_sessions = 1024;
@@ -140,7 +133,7 @@ bool xsys_tcp_server2::open(int listen_port, int ttl, int max_sessions, int recv
 	m_pused_index = (int *)calloc(max_sessions, sizeof(int));
 
 	m_send_len = max(send_len, 32);
-	m_send_queue.init(max(4, send_len/1024*(max_sessions/5+2)), max(max_sessions/2+1, 4));
+	m_send_queue.init(max(4, (send_len+1023)/1024*(max_sessions/5+2)), max(max_sessions/2+1, 4));
 	m_close_requests.init(4, max_sessions/2+1);
 
 	WriteToEventLog("xsys_tcp_server2::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
@@ -263,10 +256,12 @@ void xsys_tcp_server2::run(void)
 		if (ret == 0) {
 			++idle_times;
 
-			if (idle_times >= 10){
-				timeout_check();	// 只是检查timeout，关闭过期连接
+			/*
+			if (idle_times >= 0){
+				// timeout_check();	// 只是检查timeout，关闭过期连接
 				idle_times = 0;
 			}
+			*/
 			continue;
 		}
 
@@ -275,11 +270,13 @@ void xsys_tcp_server2::run(void)
 		for (j = m_used_count-1; j >= 0; j--){
 			i = m_pused_index[j];
 			if (!PSESSION_ISOPEN(m_psessions+i)){
+				WriteToEventLog("%s: ERROR used[%d] session(%d) is not open!", szFunctionName, j, i);
 				session_close_used(j);
 				continue;
 			}
 
 			if (!FD_ISSET(m_psessions[i].sock, &fdsr)){
+				/*
 				if (XSYS_TCP_SESSION_TIMEOUT(i)){
 					WriteToEventLog("%s: <%d> timeout[%d](%d - %d)", szFunctionName, i, m_session_ttl, int(m_psessions[i].createTime), m_heartbeat);
 
@@ -291,12 +288,14 @@ void xsys_tcp_server2::run(void)
 					sprintf(parms, "idle:%d", i);
 					notify_do_cmd(parms);
 				}
+				//*/
 
 				continue;
 			}
 
 			SYS_SOCKET sock = m_psessions[i].sock;
-			int len = SysRecvData(sock, m_precv_buf, m_recv_len-1, 100);
+			int len = // ::recv(sock, m_precv_buf, m_recv_len - 1, 0);
+				SysRecvData(sock, m_precv_buf, m_recv_len - 1, 300);
 			FD_CLR(sock, &fdsr);
 
 			if (len < 0) {        // client close
@@ -316,12 +315,25 @@ void xsys_tcp_server2::run(void)
 			// receive data
 			m_precv_buf[len] = '\0';
 			WriteToEventLog("%s: client[%d/sock=%d, len=%d]", szFunctionName, i, sock, len);
-			session_recv(i, len);	// 将数据存入session的临时缓存
+			int r;
 			m_psessions[i].recv_state = XTS_RECVING;
+			m_psessions[i].last_trans_time = m_psessions[i].last_recv_time = m_heartbeat;
+
+			if (m_psessions[i].recv_len == 0 && calc_msg_len(m_precv_buf, len) == len){
+				// 接收了完整包，直接送入处理队列
+				r = m_recv_queue.put(i, m_precv_buf, len);
+				m_psessions[i].recv_state = XTS_RECV_READY;
+				WriteToEventLog("%s: <%d/%d> - send to recv_queue", szFunctionName, i, m_psessions[i].sock);
+				xsys_sleep_ms(50);
+				continue;
+			}
+				
+			// 需要和上次接收合并处理的情况
+			session_recv(i, len);	// 将数据存入session的临时缓存
 
 			// 检查接收状态
 			// 返回首个完整包的应有长度，0 < 为非协议包
-			int r = calc_msg_len(i);
+			r = calc_msg_len(i);
 			WriteToEventLog("%s: %d <- %d/%d bytes recved", szFunctionName,
 				m_psessions[i].sock,
 				m_psessions[i].recv_len, r
@@ -352,7 +364,7 @@ void xsys_tcp_server2::run(void)
 						break;
 					r = calc_msg_len(i);
 				}
-				WriteToEventLog("%s: <%d/%d> - send packet to recver", szFunctionName, i, m_psessions[i].sock);
+				WriteToEventLog("%s: <%d/%d> - send to recv_queue", szFunctionName, i, m_psessions[i].sock);
 
 				break;
 			case XTS_RECV_ERROR:
@@ -378,16 +390,19 @@ void xsys_tcp_server2::run(void)
 				if (j == m_session_count)
 					j = 0;
 			}
-			if (i == m_session_count){
-				WriteToEventLog("%s: max connections(%d) arrive.", szFunctionName, i);
-				continue;
-			}
-
-			n = m_listen_sock.accept(m_psessions[j].sock);
+			SYS_SOCKET sock = SYS_INVALID_SOCKET;
+			n = m_listen_sock.accept(sock);
 			if (n != 0) {
 				break;
 			}
 
+			if (i == m_session_count){
+				WriteToEventLog("%s: max connections(%d) arrive.", szFunctionName, i);
+				::close(sock);
+				continue;
+			}
+
+			m_psessions[j].sock = sock;
 			session_open(j);
 			m_pused_index[m_used_count++] = j;
 
@@ -488,7 +503,7 @@ void xsys_tcp_server2::send_server(void)
 			write_buf_log(szFunctionName, (unsigned char *)ptemp_buf, len);
 		}else{
 			SYS_SOCKET sock = m_psessions[i].sock;
-			int r = SysSendData(sock, ptemp_buf, len, 100);
+			int r = SysSendData(sock, ptemp_buf, len, 300);
 
 			if (r <= 0){
 				WriteToEventLog("%s: 发送错误(%d)(return = %d)", szFunctionName, i, r);
@@ -496,6 +511,7 @@ void xsys_tcp_server2::send_server(void)
 			}else{
 				WriteToEventLog("%s: the %dth session sent (ret = %d, len=%d)", szFunctionName, i, r, len);
 				m_psessions[i].last_trans_time = t;
+				m_psessions[i].sent_len = r;
 				on_sent(i, r);
 			}
 		}
@@ -669,7 +685,7 @@ void xsys_tcp_server2::session_recv_reset(int i)
 {
 	xtcp2_session * psession = m_psessions + i;
 	if (psession->precv_buf){
-		free(psession->precv_buf);  psession->precv_buf = 0;
+		::free(psession->precv_buf);  psession->precv_buf = 0;
 	}
 	psession->recv_buflen = psession->recv_len = 0;
 	psession->recv_state = XTS_RECV_READY;
@@ -678,7 +694,17 @@ void xsys_tcp_server2::session_recv_reset(int i)
 // 将数据发布到request队列
 int xsys_tcp_server2::session_recv_to_queue(int i, int len)
 {
+	if (len < 1 || i < 0 || i > m_session_count-1){
+		WriteToEventLog("session_recv_to_request(%d, %d): 参数出错", i, len);
+		return 0;
+	}
+
 	xtcp2_session * psession = m_psessions + i;
+
+	if (!PSESSION_ISOPEN(psession)){
+		WriteToEventLog("会话%d已关闭，不发送", i);
+		return 0;
+	}
 	
 	if (len > psession->recv_len)
 		len = psession->recv_len;
@@ -694,8 +720,7 @@ int xsys_tcp_server2::session_recv_to_queue(int i, int len)
 		memmove(p, p+len, psession->recv_len);
 	}
 
-	xsys_sleep_ms(3);
-	WriteToEventLog("session_recv_to_queue: %d - send %d bytes to recver", i, r);
+	WriteToEventLog("session_recv_to_request: %d - send %d -> do_msg", i, r);
 
 	return r;
 }
@@ -703,8 +728,6 @@ int xsys_tcp_server2::session_recv_to_queue(int i, int len)
 int xsys_tcp_server2::session_recv(int i, int len)
 {
 	xtcp2_session * psession = m_psessions + i;
-
-	m_psessions[i].last_trans_time = m_psessions[i].last_recv_time = m_heartbeat;
 
 	int l = psession->recv_len + len;
 	if (psession->recv_buflen < l+1){

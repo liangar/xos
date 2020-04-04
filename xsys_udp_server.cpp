@@ -294,7 +294,7 @@ void xsys_udp_server::run(void)
 		}
 		unlock_prop();
 
-		int crc;
+		int crc = 0;
 
 		SYS_INET_ADDR from_addr;
 		ZeroData(from_addr);
@@ -341,22 +341,23 @@ void xsys_udp_server::run(void)
 //			break;
 		}
 
+		// 找session，并检查timeout的会话
+		int i = opened_find(&crc, &from_addr);
+
 		{
 			char ip_port[64];
 			SysInetRevNToA(from_addr, ip_port, MAX_IP_LEN);
 			WriteToEventLog(
-				"peer ip: %s(used count = %d/%d)\n",
-				ip_port, m_used_count, (m_used_count > 0)?m_pused_index[m_used_count-1]:0
+				"peer ip: %s(used count = %d/%d) crc=%08X\n",
+				ip_port, m_used_count, (m_used_count > 0)?m_pused_index[m_used_count-1]:0,
+				(unsigned int)crc
 			);
 		}
 
-		// 找session，并检查timeout的会话
-		int i = opened_find(&crc, &from_addr);
-
+		lock_prop(1);
 		if (i == -1){
 			WriteToEventLog("新建会话:%04X, time = %d", crc, m_heartbeat);
 
-			lock_prop(1);
 			if (m_used_count > 0){
 				if (m_session_count == m_used_count){
 					WriteToEventLog("强制最早建立的会话过期，used = %d", m_used_count);
@@ -387,12 +388,23 @@ void xsys_udp_server::run(void)
 			memcpy(&m_psessions[i].addr, &from_addr, sizeof(SYS_INET_ADDR));
 			m_psessions[i].addr_crc = crc;
 
-			unlock_prop();
 		}
+		m_psessions[i].last_trans_time = m_psessions[i].last_recv_time = m_heartbeat;
+		unlock_prop();
 
 		// receive data
 		m_precv_buf[len] = '\0';
-		int r = session_recv(i, len);	// 将数据存入session的临时缓存
+		int r;
+
+		if (m_psessions[i].recv_len == 0 && calc_msg_len(i, m_precv_buf, len) == len){
+			// 接收了完整包，直接送入处理队列
+			r = m_recv_queue.put(i, m_precv_buf, len);
+			m_psessions[i].recv_state = XTS_RECV_READY;
+			WriteToEventLog("%s: <%d> - send to recv_queue", szFunctionName, i);
+			continue;
+		}
+
+		r = session_recv(i, len);	// 将数据存入session的临时缓存
 
 		if (r >= len){
 			m_psessions[i].recv_state = XTS_RECVING;
@@ -834,10 +846,6 @@ int xsys_udp_server::session_recv_to_request(int i, int len)
 int xsys_udp_server::session_recv(int i, int len)
 {
 	xudp_session * psession = m_psessions + i;
-
-	lock_prop(1);
-	m_psessions[i].last_trans_time = m_psessions[i].last_recv_time = m_heartbeat;
-	unlock_prop();
 
 	if (psession->recv_len < 0)
 		psession->recv_len = 0;
