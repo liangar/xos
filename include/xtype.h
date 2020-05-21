@@ -42,6 +42,14 @@ int x_bcd2hex(unsigned char *d, const unsigned char * s, int len);
 int x_hex2array(unsigned char * d, const char * s, int len);
 int x_hex2array2(unsigned char * d, const char * s, int len);
 int x_array2hex(char * d, const unsigned char * s, int len);
+/*
+ * @brief 0x1A 0x2B 0x3C 0x4D 0x05 -> "054D3C2B1A"
+ * @param[in]  d result data
+ * @param[in]  s data for convert
+ * @len[in]    length of s
+ * @return length of d
+ */
+int x_array2hexv(char * d, const unsigned char * s, int len);
 
 int x_hex2long(const char * s);
 void x_long2hex(char * d, long v);

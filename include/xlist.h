@@ -49,6 +49,7 @@ public:
 protected:
 	bool increate_a_step(void);
 };
+
 template <class T>
 xlist<T>::xlist()
 	: m_phandles(0)
@@ -124,6 +125,9 @@ bool xlist<T>::add(const T * h)
 {
 	if (h == 0)  return true;
 
+	if (m_count < 0 || m_all < 1)
+		init(1, m_nstep);
+	
 	if (m_all <= m_count){
 		if (!increate_a_step())
 			return false;
@@ -271,7 +275,11 @@ public:
 
 	T * m_phandles;					// 数组
 	int m_count, m_all, m_nstep;	// 当前空间长度,总长度,增长速度
+
+protected:
+	bool increate_a_step(void);
 };
+
 template <class T>
 xlist_s<T>::xlist_s()
 : m_phandles(0)
@@ -288,13 +296,13 @@ xlist_s<T>::~xlist_s()
 template <class T>
 int xlist_s<T>::init(int ncount, int nstep)
 {
+	down();
+
 	if (ncount < 1 || ncount > 32 * 1024)
 		ncount = 8;
 	if (nstep < 1 || nstep > 32 * 1024)
 		nstep = 8;
 
-	if (m_phandles)
-		free(m_phandles);
 	m_phandles = (T *)calloc(ncount, sizeof(T));
 	if (m_phandles == 0)
 		return -1;
@@ -315,16 +323,42 @@ int xlist_s<T>::down()
 }
 
 template <class T>
+bool xlist_s<T>::increate_a_step(void)
+{
+	int l = m_count + m_nstep;
+
+	// 保证数据正确性的检查、调整
+	if (l == 0){
+		if (m_nstep < 8)
+			m_nstep = l = 8;
+		m_count = 0;
+	}
+
+	// 分配空间
+	T * p;
+	if (m_phandles == 0)
+		p = (T *)calloc(l, sizeof(T));
+	else
+		p = (T *)realloc(m_phandles, sizeof(T) * l);
+
+	if (p == 0)  return false;
+
+	// 修改
+	m_all = l;
+	m_phandles = p;
+	
+	return true;
+}
+
+template <class T>
 bool xlist_s<T>::add(T v)
 {
 	if (m_all <= m_count){
-		int l = m_count + m_nstep;
-		T * p = (T *)realloc(m_phandles, sizeof(T) * l);
-		if (p == 0)  return false;
-
-		m_all = l;
-		m_phandles = p;
+		if (!increate_a_step())
+			return false;
 	}
+	
+	// 存放数据
 	m_phandles[m_count++] = v;
 
 	return true;
@@ -337,15 +371,20 @@ bool xlist_s<T>::insert(T v, int i)
 		i = m_count;
 
 	if (m_all <= m_count){
-		int l = m_count + m_nstep;
-		T * p = (T *)realloc(m_phandles, sizeof(T) * l);
-		if (p == 0)  return false;
-
-		m_all = l;
-		m_phandles = p;
+		if (!increate_a_step())
+			return false;
 	}
-	if (i < m_count)
-		memmove(m_phandles + i + 1, m_phandles + i, sizeof(T) * (m_count - i));
+	if (m_count == 0)
+		i = 0;
+	else{
+		if (i < 0)
+			i = 0;
+		else if (i > m_count - 1)
+			i = m_count;
+
+		if (i < m_count)
+			memmove(m_phandles + i + 1, m_phandles + i, sizeof(T) * (m_count - i));
+	}
 
 	m_phandles[i] = v;
 	m_count ++;
@@ -388,7 +427,7 @@ int xlist_s<T>::free_all()
 template <class T>
 bool xlist_s<T>::merge(xlist_s<T> * plist)
 {
-	if (plist->m_count == 0)  return true;
+	if (plist->m_count <= 0)  return true;
 
 	int n = m_count + plist->m_count;
 	T * p;

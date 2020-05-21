@@ -521,7 +521,7 @@ int xsql3::gettables(char *ptables, int maxlen)
     if (open())  return -1;
 
 	char tableName[64];
-
+    memset(tableName, 0, sizeof(tableName));
     int r = preexec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
         XPARM_COL | XPARM_STR, tableName, sizeof(tableName),
         XPARM_END        
@@ -531,14 +531,14 @@ int xsql3::gettables(char *ptables, int maxlen)
         return r;
 
     int i, n;
-    for (i = n = 0; n < maxlen && fetch() == XSQL_OK; ){
+    for (i = n = 0; n < maxlen && fetch() == XSQL_OK; i++){
         int l = strlen(tableName);
 		if (l == 0 || n + l + 1 >= maxlen)  break;
 
         memcpy(ptables + n, tableName, l+1);
         n += l + 1;
 
-		i++;
+        memset(tableName, 0, sizeof(tableName));
     }
 	ptables[n] = '\0';
     endexec();

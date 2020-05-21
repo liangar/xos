@@ -704,7 +704,7 @@ int xsys_socket::recv_byend(char ** p, const char * endstr, int steplen, int tim
 	return len;
 }
 
-int xsys_socket::recv_all(char * buf, int l, int timeout)
+int xsys_socket::recv_all(char * buf, int l, int timeout_ms)
 {
 	if (m_sock == SYS_INVALID_SOCKET) {
 		return -1;
@@ -713,29 +713,29 @@ int xsys_socket::recv_all(char * buf, int l, int timeout)
 	if (l < 1)
 		return 0;
 
-	if (timeout < 0){
-		timeout = SYS_INFINITE_TIMEOUT;
+	if (timeout_ms < 0){
+		timeout_ms = SYS_INFINITE_TIMEOUT;
 	}
 
-	return SysRecv(m_sock, buf, l, timeout);
+	return SysRecv(m_sock, buf, l, timeout_ms);
 }
 
-int xsys_socket::send_all(const char * buf, int l, int timeout)
+int xsys_socket::send_all(const char * buf, int l, int timeout_ms)
 {
 	if (m_sock == SYS_INVALID_SOCKET) {
 		return -1;
 	}
 
-	if (timeout < 0){
-		timeout = SYS_INFINITE_TIMEOUT;
+	if (timeout_ms < 0){
+		timeout_ms = SYS_INFINITE_TIMEOUT;
 	}
 
-	return SysSend(m_sock, buf, l , timeout);
+	return SysSend(m_sock, buf, l , timeout_ms);
 }
 
 int xsys_socket::send_all(const char * buf)
 {
-	return send_all(buf, strlen(buf), 20);
+	return send_all(buf, strlen(buf), 200);
 }
 
 int xsys_socket::recvblob(char * buf, int * prest_len, int max_len, int timeout)

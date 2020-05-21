@@ -358,6 +358,19 @@ int x_array2hex(char * d, const unsigned char * s, int len)
 	return len;
 }
 
+// 0x1A 0x2B 0x3C 0x4D 0x05 -> "054D3C2B1A"
+int x_array2hexv(char * d, const unsigned char * s, int len)
+{
+	int i, j;
+	for (i = (len + 1) / 2 - 1, j = 0; i >= 0; i--) {
+		hex2chars(d+j, s[i]);
+		j += 2;
+	}
+	d[j] = 0;
+
+	return j;
+}
+
 int x_hex2bcd(unsigned char *d, const unsigned char * s, int len)
 {
 	int i;

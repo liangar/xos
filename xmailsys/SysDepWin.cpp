@@ -839,7 +839,8 @@ int SysSelect(int iMaxFD, SYS_fd_set *pReadFDs, SYS_fd_set *pWriteFDs, SYS_fd_se
 
 	if (iSelectResult < 0) {
 		ErrSetErrorCode(ERR_SELECT);
-		return ERR_SELECT;
+		return sys_get_wsa_error();
+//		return ERR_SELECT;
 	}
 	if (iSelectResult == 0) {
 		ErrSetErrorCode(ERR_TIMEOUT);

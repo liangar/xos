@@ -21,13 +21,13 @@ protected:
 	int bak(void);
 
 protected:
-	FILE *	m_hlogfile;				/// æ–‡ä»¶å¥æŸ„
-	char	m_file_name[MAX_PATH];	/// æ–‡ä»¶åç§°
-	char	m_bak_path[MAX_PATH];	/// å¤‡ä»½ç›®å½•ï¼Œå¦‚æœç›®å½•ä¸ºç©ºåˆ™ä¸å¤‡ä»½
+	FILE *	m_hlogfile;				/// ÎÄ¼ş¾ä±ú
+	char	m_file_name[MAX_PATH];	/// ÎÄ¼şÃû³Æ
+	char	m_bak_path[MAX_PATH];	/// ±¸·İÄ¿Â¼£¬Èç¹ûÄ¿Â¼Îª¿ÕÔò²»±¸·İ
 
-    bool	m_bdebug;	/// æ˜¯å¦è°ƒè¯•è¿è¡Œ
-    time_t	m_prev_time;/// ä¸Šæ¬¡æ‰“å°çš„æ—¶é—´æˆ³
-    long	m_idle; 	/// æ‰“å°æ—¶é—´æˆ³çš„é—´éš”
+    bool	m_bdebug;	/// ÊÇ·ñµ÷ÊÔÔËĞĞ
+    time_t	m_prev_time;/// ÉÏ´Î´òÓ¡µÄÊ±¼ä´Á
+    long	m_idle; 	/// ´òÓ¡Ê±¼ä´ÁµÄ¼ä¸ô
 };
 
 void test_xsys_log(char * b);

@@ -20,7 +20,10 @@ struct xudp_session{
 	int		recv_len;		/// 当前所用的缓冲空间
 	int		recv_buflen;	/// 当前缓冲长度
 
-	int		cmd_count;
+	int		recv_count; 	/// 总共接收的包
+	
+	SYS_SOCKET target_sock; /// 转发的目标地址
+
 	int		running_cmdid;
 };
 
@@ -75,9 +78,13 @@ public:
 	/// 服务线程函数
 	void send_server(void);	/// 发送处理线程
 	void msg_server(void);	/// 消息处理服务线程（从request队列接收数据，用do_msg进行处理）
+	void relay_server(void);/// 转发处理服务
 
 protected:
 	void run(void);			/// 接收处理线程
+
+	/// 转发函数判断
+	virtual const char * get_target_url(int isession, char * pbuf, int len);
 
 	virtual int  calc_msg_len(int isession) = 0;	/// <0|0|>0 = 无效出错数据长度|无用数据|完整包数据长度
 	virtual int  calc_msg_len(int isession, char * pbuf, int len) = 0;
@@ -89,9 +96,10 @@ protected:
 	virtual bool on_closed  (int i) = 0;
 	virtual int  do_idle	(int i) = 0;
 
+
 protected:
 //	void timeout_check(void);
-	int opened_find(int * crc, SYS_INET_ADDR * addr);
+	int opened_find(bool &for_trans, int * crc, SYS_INET_ADDR * addr);
 
 	void session_open(int i);
 	void session_close(xudp_session * psession);
@@ -114,6 +122,7 @@ protected:
 	xseq_buf	m_recv_queue;	/// 保存提交数据(循环队列)
 	xseq_buf	m_send_queue;	/// 保存发送数据
 	xseq_buf	m_close_requests; 	/// 关闭通知
+	xseq_buf	m_relay_queue;	/// 转发通知 2020-04-14
 
 	volatile bool	m_has_new_cmd;	/// 标志：有新消息
 
@@ -132,4 +141,5 @@ protected:
 
 	xsys_thread m_send_thread;	/// 发送服务线程
 	xsys_thread m_msg_thread;	/// 消息处理服务线程
+	xsys_thread m_relay_thread; /// 转发线程 2020-04-14
 };

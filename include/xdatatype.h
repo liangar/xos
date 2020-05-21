@@ -1,5 +1,48 @@
-#ifndef _XDATATYPE_H_
-#define _XDATATYPE_H_
+#pragma once
+
+#define XSQL_ERROR		-1
+#define XSQL_ERROR_PARAM	-10001
+
+#define XSQL_OK         0
+#define XSQL_SUCCESS    0
+#define XSQL_WARNING    1
+#define XSQL_NO_DATA    2
+#define XSQL_EXECUTING  3
+#define XSQL_HAS_DATA	4
+
+#define XSQL_DEFAULT	0
+#define XSQL_STATIC		1
+#define XSQL_DYNAMIC	2
+
+
+#define XSQL_COMMIT     1
+#define XSQL_ROLLBACK   0
+
+/* 系列函数bind: 绑定数据到参数或列
+ * 函数bind(int nParmClass, ...):
+ *  从nParmClass开始是可变的参数, 由前导参数种类分节.
+ *  在XPARM_IN节:
+ *    XPARM_LONG   后接一个long *变量.
+ *    XPARM_DOUBLE 后接一个double *变量.
+ *    XPARM_DATE   后接一个char *描述串变量,格式为'YYYY-MM-DD hh:mm:ss\0'
+ *    XPARM_STR    后接一个char *变量,后跟上一个表示缓冲区长度的long变量
+ *  在XPARM_OUT和XPARM_IO以及XPARM_COL节:
+ *    XPARM_LONG   后接一个long *变量.
+ *    XPARM_DOUBLE 后接一个double *变量.
+ *    XPARM_DATE   后接一个char *描述串变量,格式为'YYYY-MM-DD hh:mm:ss\0',长度为32.
+ *    XPARM_STR    后接一个char *变量, 后跟上一个表示缓冲区长度的long变量.
+ *    或上XPARM_IND的类型后还要接一个long *变量用来指示或接收前一变量是否为空值以及值的长度.
+ *  调用例子:
+ *    long lID;
+ *    char s[100];
+ *    long lInd = 100;
+ *    char t[32];
+ *    bind("select a, b from t where tid = ?",
+ *          XPARM_COL|XPARM_NSTR,  s,  &lInd,
+ *                    XPARM_DATE,  t,
+ *          XPARM_IN |XPARM_LONG,  lID,
+ *          XPARM_END);
+ */
 
 #ifndef XPARM_CLASS_MASK
 const unsigned int
@@ -60,25 +103,33 @@ const int
 #define XPARM_HAS_IND(x)            ((x) & XPARM_IND)
 #define XPARM_TYPE(x)               ((x) & XPARM_TYPE_MASK)
 #define XPARM_CLASS(x)              ((x) & XPARM_CLASS_MASK)
-#define XPARM_TYPE_VALID(x)         (XPARM_TYPE(x) <= XPARM_MAX)
+#define XPARM_TYPE_VALID(x)         ((XPARM_TYPE(x) <= XPARM_MAX))
 #define XPARM_MAKE_TYPE(xclass, x)  ((xclass) | (x))
 #define XPARM_SPECIAL(x)            ((x) & XPARM_SPEC_MASK)
 
 #endif
 
+#define XPARM_DATETIME_LEN	24
+#define XPARM_DATE_LEN		12
+#define XPARM_TIME_LEN		16
+
+const int
+		XPARM_NULL = -1,
+		XPARM_NTS = -3;
+
 typedef struct tagXParm{    // 参数描述
 	unsigned int type;      // 数据类型
 	long size;              // 长度,用在输入参数
-	union{
-		long *pind;             // 指示,用在输出参数或列
+	union {
+		long* pind;             // 指示,用在输出参数或列
 		bool isnull;
 	};
-	union{
-		int	 * pi;
-		double * pd;
-		char * ps;
-		void * pv;          // 值
-	};
+	union {                // 值
+		short   * pshort;
+        int     * pi;
+		float   * pf;
+        double  * pd;
+        char    * ps;
+        void    * pv;
+    };
 } XParm, * LPXParm;
-
-#endif // _XDATATYPE_H_

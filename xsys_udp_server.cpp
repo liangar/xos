@@ -5,6 +5,8 @@
 			 m_psessions[i].last_recv_time == m_psessions[i].createTime \
 			))
 
+#define XSYS_UDP_RELAY_TIME 	(120 * 1000)
+
 static unsigned int run_send_thread(void * pudp_server)
 {
 	try{
@@ -21,6 +23,17 @@ static unsigned int run_msg_thread(void * pudp_server)
 	try{
 		xsys_udp_server * pserver = (xsys_udp_server *)pudp_server;
 		pserver->msg_server();
+	}catch(...){
+		WriteToEventLog("xsys_udp_server::msg_server: an exception occured.");
+	}
+	return 0;
+}
+
+static unsigned int run_relay_thread(void * pudp_server)
+{
+	try{
+		xsys_udp_server * p = (xsys_udp_server *)pudp_server;
+		p->relay_server();
 	}catch(...){
 		WriteToEventLog("xsys_udp_server::msg_server: an exception occured.");
 	}
@@ -130,25 +143,31 @@ void xsys_udp_server::timeout_check(void)
 }
 //*/
 
-int xsys_udp_server::opened_find(int * crc, SYS_INET_ADDR * addr)
+/*
+ * 查找匹配的会话
+ * 返回是否是转发，以及校验字
+ */
+int xsys_udp_server::opened_find(bool &for_trans, int * crc, SYS_INET_ADDR * addr)
 {
 	static const char szFunctionName[] = "xsys_udp_server::opened_find";
-	int i, n = -1;
 
-	if (addr && crc)
-		*crc = calc_addr_crc(addr);
-	else
-		if (crc)
-			*crc = 0;
+	if (!addr || !crc)
+		return -1;
+
+	int i, n = -1;
+	for_trans = false;
+
+	*crc = calc_addr_crc(addr);
 
 	for (i = m_used_count-1; i >= 0; i--){
 		int j = m_pused_index[i];
 		// 用CRC和addr进行比较查找
-		if (addr && crc && m_psessions[j].addr_crc == *crc &&
+		if (m_psessions[j].addr_crc == *crc &&
 			memcmp(&m_psessions[j].addr, addr, sizeof(SYS_INET_ADDR)) == 0)
 		{
 			n = j;
-			continue;
+			for_trans = XSYS_VALID_SOCK(m_psessions[j].target_sock);
+			break;
 		}
 	}
 
@@ -172,6 +191,7 @@ bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 		(recv_len+1023) / 1024 * (max(16, (max_sessions / 8) + 8)),	// 最少16,最多大约1/4
 		max(max_sessions/2+16, 4)
 	);
+
 	m_listen_port = listen_port;
 	m_session_ttl = ttl;
 	m_session_idle = ttl / 4;
@@ -195,6 +215,11 @@ bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 		max(max_sessions/16+4, 16)
 	);
 	m_close_requests.init(8, max_sessions/64+16);
+
+	m_relay_queue.init(
+		(recv_len+1023) / 1024 * (max(16, (max_sessions / 8) + 8)),	// 最少16,最多大约1/4
+		max(max_sessions/2+16, 4)
+	);
 
 	WriteToEventLog("xsys_udp_server::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
 		m_session_ttl, max_sessions, m_recv_len, m_send_len
@@ -229,6 +254,8 @@ void xsys_udp_server::run(void)
 	WriteToEventLog("%s: %s\n", szFunctionName, m_plisten_sock->get_self_ip(m_lastmsg));
 
 	// 启动发送线程
+	if (m_relay_thread.m_thread == SYS_INVALID_THREAD)
+		m_relay_thread.init(run_relay_thread, this);
 	if (m_send_thread.m_thread == SYS_INVALID_THREAD)
 		m_send_thread.init(run_send_thread, this);
 	if (m_msg_thread.m_thread == SYS_INVALID_THREAD)
@@ -341,8 +368,9 @@ void xsys_udp_server::run(void)
 //			break;
 		}
 
-		// 找session，并检查timeout的会话
-		int i = opened_find(&crc, &from_addr);
+		// 找session
+		bool bfor_relay;
+		int i = opened_find(bfor_relay, &crc, &from_addr);
 
 		{
 			char ip_port[64];
@@ -390,20 +418,49 @@ void xsys_udp_server::run(void)
 
 		}
 		m_psessions[i].last_trans_time = m_psessions[i].last_recv_time = m_heartbeat;
+		m_psessions[i].recv_count++;
 		unlock_prop();
 
 		// receive data
 		m_precv_buf[len] = '\0';
 		int r;
 
+		/// 判断转发, 首次接收时判断
+		if (m_psessions[i].recv_count == 1 && !bfor_relay){
+			const char * prelay_url = get_target_url(i, m_precv_buf, len);
+			if (prelay_url){
+				xsys_socket sock;
+				r = sock.connect(prelay_url, 0, 2, false);
+				if (r >= 0){
+					char b[64];
+					WriteToEventLog("relay peer ip: %s", sock.get_peer_ip(b));
+					WriteToEventLog("relay owner: %s\n", sock.get_self_ip(b));
+					// 设置转发
+					m_psessions[i].target_sock = sock.m_sock;
+					sock.m_sock = SYS_INVALID_SOCKET;
+					bfor_relay = true;
+				}else
+					WriteToEventLog("建立转发(%s)失败", prelay_url);
+			}
+		}
+
+		/// 判断直接发送
 		if (m_psessions[i].recv_len == 0 && calc_msg_len(i, m_precv_buf, len) == len){
 			// 接收了完整包，直接送入处理队列
-			r = m_recv_queue.put(i, m_precv_buf, len);
+			if (bfor_relay){
+				SysSendData(m_psessions[i].target_sock, m_precv_buf, len, 500);
+				r = m_relay_queue.put(i, m_precv_buf, len);
+				WriteToEventLog("%s: <%d> - send to relay_queue", szFunctionName, i);
+			}else{
+				r = m_recv_queue.put(i, m_precv_buf, len);
+				WriteToEventLog("%s: <%d> - send to recv_queue", szFunctionName, i);
+			}
 			m_psessions[i].recv_state = XTS_RECV_READY;
-			WriteToEventLog("%s: <%d> - send to recv_queue", szFunctionName, i);
+			xsys_sleep_ms(5);
 			continue;
 		}
 
+		/// 分包到达的处理
 		r = session_recv(i, len);	// 将数据存入session的临时缓存
 
 		if (r >= len){
@@ -443,7 +500,7 @@ void xsys_udp_server::run(void)
 				r = calc_msg_len(i);
 			}
 			WriteToEventLog("%s: %d - send packet to recver", szFunctionName, i);
-			xsys_sleep_ms(3);
+			xsys_sleep_ms(5);
 
 			break;
 		case XTS_RECV_ERROR:
@@ -636,6 +693,205 @@ void xsys_udp_server::send_server(void)
 	WriteToEventLog("%s : Exit.", szFunctionName);
 }
 
+void xsys_udp_server::relay_server(void)
+{
+	static const char szFunctionName[] = "xsys_udp_relay_server";
+
+	WriteToEventLog("%s: in", szFunctionName);
+
+	int idle = XSYS_UDP_RELAY_TIME;
+
+	char* ptemp_buf = (char*)calloc(1, m_recv_len + 1);
+
+	class {
+	public:
+		xlist_s<int>		indexs;	// 记录session引用位置
+		xlist_s<SYS_SOCKET> socks;	// 记录转发socket
+
+		void add_session(int isession, SYS_SOCKET sock)
+		{
+			int i;
+			for (i = 0; i < indexs.m_count; i++)
+				if (isession == indexs[i])
+					break;
+			if (i == indexs.m_count) {
+				indexs.add(isession);
+				socks.add(sock);
+				WriteToEventLog("SS add(%d): %d, %d", i, isession, sock);
+			}
+		}
+		void del_session(int isession)
+		{
+			int i;
+			for (i = 0; i < indexs.m_count; i++)
+				if (isession == indexs[i]) {
+					del_session_i(i);
+					break;
+				}
+		}
+		void del_session_i(int i)
+		{
+			if (i >= 0 && i < indexs.m_count) {
+				WriteToEventLog("SS del(%d): %d, %d", i, indexs[i], socks[i]);
+				indexs.del(i);
+				socks.del(i);
+			}
+		}
+		void clear_invalid(xudp_session* s, int count)
+		{
+			int i;
+			for (i = 0; i < indexs.m_count;) {
+				int isession = indexs[i];
+				if (isession >= count || isession < 0 || !XSYS_VALID_SOCK(s[isession].target_sock)) {
+					indexs.del(i);
+					socks.del(i);
+				}
+				else
+					i++;
+			}
+		}
+		void clear_all(void)
+		{
+			indexs.free_all();  socks.free_all();
+		}
+	} SS;
+
+	int r;
+	while (m_isrun){
+		int isession = -1;
+
+		m_relay_queue.set_timeout_ms(idle);
+
+		/// 取出数据,转发
+		int i, len;
+		do{
+			// memset(ptemp_buf, 0, m_recv_len);
+			len = m_relay_queue.get_free((long *)(&isession), ptemp_buf);
+
+			if (isession == -1 && len == 4){
+				WriteToEventLog("%s: get cmd[%s]", szFunctionName, ptemp_buf);
+				if (strcmp(ptemp_buf, "stop") == 0)
+					break;
+				// sock.close();
+				xsys_sleep_ms(200);
+				continue;
+			}
+
+			if (len > 0 && isession >= 0){
+				// 转发
+				lock_prop(1);
+				SYS_SOCKET sock = m_psessions[isession].target_sock;
+				unlock_prop();
+
+				if (!XSYS_VALID_SOCK(sock)){
+					SS.del_session(isession);
+					WriteToEventLog("%s: no relay, [%d]'s relay-sock is invalid(%u)",
+						szFunctionName, isession, (unsigned int)(sock)
+					);
+				}else{
+					xsys_socket s;
+					s.m_sock = sock;
+					char b[32];
+					WriteToEventLog("-> %s", s.get_peer_ip(b));
+					WriteToEventLog("<- %s", s.get_self_ip(b));
+					// r = SysSendData(sock, ptemp_buf, len, 100);
+					r = len;
+					s.m_sock = SYS_INVALID_SOCKET;
+					if (r != len){
+						WriteToEventLog("%s: relay [%d]'s %d bytes parcel failed, r = %d",
+							szFunctionName, isession, len, r
+						);
+						SS.del_session(isession);
+					}else{
+						// 转发成功,加入
+						SS.add_session(isession, sock);
+					}
+				}
+				write_buf_log(szFunctionName, (unsigned char *)ptemp_buf, len);
+				m_relay_queue.set_timeout_ms(10);
+			}
+		}while(len > 0);
+
+		if (!m_isrun)
+			break;
+
+		long tnow = int(time(0));
+
+		lock_prop(2);
+		SS.clear_invalid(m_psessions, m_session_count);
+		unlock_prop();
+
+		if (SS.indexs.m_count < 1)
+		{
+			idle = XSYS_UDP_RELAY_TIME;
+			continue;
+		}
+
+		// idle = min(s_expires_secs - 60 - (tnow - s_last_auth_time), s_idle);
+		// idle = max(idle, 5);
+		idle = 2;
+
+		// WriteToEventLog("will wait %d secs, socks=%d\n", idle, SS.socks.m_count);
+
+		if (SS.socks.m_count < 1)  continue;
+
+		// 接收数据
+		int n;
+		fd_set fdsr;
+		FD_ZERO(&fdsr);
+		for (i = n = 0; i < SS.socks.m_count; i++){
+			FD_SET(SS.socks[i], &fdsr);
+			if (n < int(SS.socks[i]))
+				n = int(SS.socks[i]);
+		}
+
+		if (n == 0){
+			WriteToEventLog("%s: no valid socket", szFunctionName);
+			continue;
+		}
+
+		// struct timeval tv;
+		// tv.tv_sec  = 2;
+		// tv.tv_usec = 0;
+		r = SysSelect(n+1, &fdsr, NULL, NULL, 1900);
+		if (r <= 0){
+			if (r < 0 && r != ERR_TIMEOUT)
+				WriteToEventLog("%s: select ret: %d", szFunctionName, r);
+			continue;
+		}
+
+		for (i = n = 0; i < SS.socks.m_count; i++){
+			SYS_SOCKET s = SS.socks[i];
+			if (!XSYS_VALID_SOCK(s))
+				continue;
+
+			++n;
+
+			if (!FD_ISSET(s, &fdsr))
+				continue;
+
+			len = SysRecvData(s, ptemp_buf, m_recv_len, 300);
+			FD_CLR(s, &fdsr);
+
+			if (len < 0){
+				SS.del_session_i(i);
+				continue;
+			}
+
+			tnow = int(time(0));
+
+			lock_prop(1);
+			m_psessions[SS.indexs[i]].last_trans_time = int(time(0));
+			unlock_prop();
+			r = send(SS.indexs[i], ptemp_buf, len);
+			// write_buf_log(szFunctionName, (unsigned char *)ptemp_buf, len);
+		}
+	}
+
+	::free(ptemp_buf);
+	WriteToEventLog("%s: out", szFunctionName);
+}
+
 void xsys_udp_server::close_all_session(void)
 {
 	if (m_psessions){
@@ -655,8 +911,9 @@ bool xsys_udp_server::stop(int secs)
 	m_isrun = false;
 
 	// notify send/recv thread stop
-	m_send_queue.put(-1, "stop", 4);
 	m_recv_queue.put(-1, "stop", 4);
+	m_send_queue.put(-1, "stop", 4);
+	m_relay_queue.put(-1, "stop", 4);
 	xsys_sleep_ms(10);
 
 	if (m_plisten_sock)
@@ -666,8 +923,9 @@ bool xsys_udp_server::stop(int secs)
 
 	xsys_sleep_ms(100);
 
-	m_send_thread.down();
 	m_msg_thread.down();
+	m_send_thread.down();
+	m_relay_thread.down();
 
 	if (m_plisten_sock){
 		m_plisten_sock->close();
@@ -694,6 +952,7 @@ bool xsys_udp_server::close(int secs)
 
 	m_recv_queue.down();
 	m_send_queue.down();
+	m_relay_queue.down();
 
 	xsys_sleep_ms(10);
 
@@ -821,9 +1080,12 @@ int xsys_udp_server::session_recv_to_request(int i, int len)
 
 	int r;
 
-	if (PUDPSESSION_ISOPEN(psession))
-		r = m_recv_queue.put(i, psession->precv_buf, len);
-	else{
+	if (PUDPSESSION_ISOPEN(psession)){
+		if (XSYS_VALID_SOCK(psession->target_sock))
+			r = m_relay_queue.put(i, psession->precv_buf, len);
+		else
+			r = m_recv_queue.put(i, psession->precv_buf, len);
+	}else{
 		// 正常情况下，有接收，会话应该不会被关闭
 		r = 0;
 		WriteToEventLog("会话%d已关闭，不发送", i);
@@ -928,6 +1190,11 @@ bool xsys_udp_server::has_new_cmd(void)
 //	lock_prop(1);
 	b = m_has_new_cmd;
 //	unlock_prop();
-	
+
 	return b;
+}
+
+const char * xsys_udp_server::get_target_url(int isession, char * pbuf, int len)
+{
+	return NULL;
 }
