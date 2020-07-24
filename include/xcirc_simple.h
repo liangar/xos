@@ -25,8 +25,8 @@ protected:
 
 private:
 	T *		m_pbuffer;	/// 队列
-	int		m_head;		/// 队头
-	int		m_tail;		/// 队尾
+	volatile int	m_head;		/// 队头
+	volatile int	m_tail;		/// 队尾
 };
 
 template<class T>
@@ -50,14 +50,14 @@ int xcirc_simple<T>::open(int len, int timeout_ms)
 {
 	if (len >= 16)
 		m_len = len;
+
 	if (timeout_ms >= 2000)
 		m_timeout_ms = timeout_ms;
 
-	m_pbuffer = (T *)malloc(sizeof(T) * m_len);
+	m_pbuffer = (T *)calloc(m_len, sizeof(T));
+
 	if (m_pbuffer == 0)
 		return -1;
-
-	memset(m_pbuffer, 0x0, m_len * sizeof(T));
 
 	return 0;
 }
@@ -66,8 +66,9 @@ template<class T>
 void xcirc_simple<T>::close(void)
 {
 	if (m_pbuffer){
-		free(m_pbuffer);  m_pbuffer = 0;
+		free(m_pbuffer);  m_pbuffer = NULL;
 	}
+	m_head = m_tail = 0;
 }
 
 template<class T>

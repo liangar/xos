@@ -303,6 +303,7 @@ int SysSetupSocketBuffers(int *piSndBufSize, int *piRcvBufSize)
 static int SysSetSocketsOptions(SYS_SOCKET SockFD, int iType)
 {
 	/* Set socket buffer sizes */
+	/*
 	if (iSndBufSize > 0) {
 		int iSize = iSndBufSize;
 
@@ -315,15 +316,10 @@ static int SysSetSocketsOptions(SYS_SOCKET SockFD, int iType)
 		setsockopt((int) SockFD, SOL_SOCKET, SO_RCVBUF, (char const *) &iSize,
 			   sizeof(iSize));
 	}
+	//*/
 
 	int iActivate = 1;
 
-	if (setsockopt(SockFD, SOL_SOCKET, SO_REUSEADDR, (char const *) &iActivate,
-		       sizeof(iActivate)) != 0) {
-		ErrSetErrorCode(ERR_SETSOCKOPT);
-		return ERR_SETSOCKOPT;
-	}
-	
 	if (iType == SOCK_STREAM){
 		/* Disable linger */
 		struct linger Ling;
@@ -338,6 +334,12 @@ static int SysSetSocketsOptions(SYS_SOCKET SockFD, int iType)
 		setsockopt(SockFD, SOL_SOCKET, SO_KEEPALIVE, (char const *) &iActivate,
 			   sizeof(iActivate));
 	}else{
+		if (setsockopt(SockFD, SOL_SOCKET, SO_REUSEADDR, (char const*)&iActivate,
+			sizeof(iActivate)) != 0) {
+			ErrSetErrorCode(ERR_SETSOCKOPT);
+			return ERR_SETSOCKOPT;
+		}
+
 		BOOL bNewBehavior = FALSE;
 		DWORD dwBytesReturned = 0;
 		WSAIoctl(
@@ -510,7 +512,7 @@ int SysRecv(SYS_SOCKET SockFD, char *pszBuffer, int iBufferSize, int iTimeout)
 static int sys_get_wsa_error(void)
 {
 	DWORD dwResult = WSAGetLastError();
-	if (dwResult == WSAETIMEDOUT){
+	if (dwResult == WSAETIMEDOUT || dwResult == WSAEINTR){
 		ErrSetErrorCode(ERR_TIMEOUT);
 		return ERR_TIMEOUT;
 	}

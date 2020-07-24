@@ -6,13 +6,13 @@
 
 struct xudp_session{
 	SYS_INET_ADDR	addr;	/// 通讯地址
-	int 	addr_crc;
+	volatile int 	addr_crc;
 
 	time_t	createTime;		/// 建立连接的时间
-	long	last_recv_time;	/// 最近接收时间
-	long	last_trans_time;/// 最近通讯时间
-	int 	idle_secs;		/// 空闲秒数，到达空闲时间，执行on_idle
-	int		peerid;			/// 连接对方的 id 标识, 给应用使用
+	volatile long	last_recv_time;	/// 最近接收时间
+	volatile long	last_trans_time;/// 最近通讯时间
+	volatile int 	idle_secs;		/// 空闲秒数，到达空闲时间，执行on_idle
+	volatile int	peerid;			/// 连接对方的 id 标识, 给应用使用
 
 	/// recv
 	XTS_STATES	recv_state;	/// 接收状态
@@ -24,7 +24,7 @@ struct xudp_session{
 	
 	SYS_SOCKET target_sock; /// 转发的目标地址
 
-	int		running_cmdid;
+	volatile int running_cmdid;
 };
 
 class xsys_udp_server : public xwork_server

@@ -6,6 +6,7 @@
 #include <xtype.h>
 #include <ss_service.h>
 #include <xsys_log.h>
+#include <thread>
 
 #ifdef WIN32
 #include <crtdbg.h>
@@ -168,8 +169,9 @@ void main(int argc, char **argv)
 	}
 
 	if (open_count > 0){
-	xsys_thread h1;
-	h1.init(recv_show, 0);
+	// xsys_thread h1;
+	// h1.init(recv_show, 0);
+	std::thread h1(recv_show, nullptr);
 
 	xsys_sleep_ms(10);
 
@@ -220,7 +222,8 @@ void main(int argc, char **argv)
 
 	for (i = 0; i < nsessions; i++)
 		g_psock[i].close();
-	h1.down();
+	// h1.down();
+	h1.join();
 	xsys_sleep(3);
 	}else{
 		printf("%s\n", xlasterror());

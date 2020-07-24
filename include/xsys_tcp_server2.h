@@ -11,6 +11,7 @@
  */
 
 #include <xwork_server.h>
+#include <atomic>
 #include <xsys_tcp_server.h>
 #include <xlist.h>
 
@@ -50,6 +51,7 @@ struct xtcp2_session{
 	char *  precv_buf;		/// 接收缓冲区
 	int		recv_len;		/// 当前所用的缓冲空间
 	int		recv_buflen;	/// 当前缓冲长度
+	int 	recv_sum;		/// 接收总数
 	
 	int 	sent_len;		/// 最近发送长度
 
@@ -62,6 +64,7 @@ struct xtcp2_session{
 /// TCP服务框架类
 class xsys_tcp_server2 : public xwork_server
 {
+#define XTCP2SESSION_INRANGE(i)	(i >= 0 && i < m_session_count)
 public:
 	/// 构造
 	xsys_tcp_server2();
@@ -90,8 +93,8 @@ public:
 	}
 	/// 取指定会话
 	xtcp2_session * get_session(int i){
-		if (i < 0 || i >= m_session_count)
-			return 0;
+		if (!XTCP2SESSION_INRANGE(i))
+			return nullptr;
 		return m_psessions + i;
 	}
 
@@ -150,7 +153,7 @@ protected:
 protected:
 	xtcp2_session *	m_psessions;/// 保存各个连接(已经建立的连接)
 	int 	  * m_pused_index;	/// 保存正在使用的连接
-	int 		m_used_count;	/// 正在使用的数量
+	std::atomic_int	m_used_count;	/// 正在使用的数量
 	int			m_session_count;
 
 	xseq_buf	m_recv_queue;	/// 保存提交数据(循环队列)
@@ -170,3 +173,4 @@ protected:
 	xsys_thread m_send_thread;	/// 发送服务线程
 	xsys_thread m_msg_thread;	/// 消息处理服务线程
 };
+

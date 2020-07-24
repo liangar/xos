@@ -1,6 +1,12 @@
+#define FD_SETSIZE 512
+
 #include <xsys_tcp_server2.h>
 
-#define XSYS_TCP_SESSION_TIMEOUT(i) 	(m_session_ttl < m_heartbeat - m_psessions[i].last_recv_time)
+#define XSYS_TCP_SESSION_TIMEOUT(i) 	((m_session_ttl < m_heartbeat - m_psessions[i].last_recv_time) || \
+			(40 < m_heartbeat - m_psessions[i].last_recv_time && \
+			 m_psessions[i].last_recv_time == m_psessions[i].createTime \
+			))
+// (m_session_ttl < m_heartbeat - m_psessions[i].last_recv_time)
 
 unsigned int xsys_tcp_server2::run_send_thread(void * ptcp_server)
 {
@@ -60,20 +66,23 @@ int xsys_tcp_server2::session_close_used(int i_used)
 
 	int i = m_pused_index[i_used];
 
-	WriteToEventLog("xsys_tcp_server2: Close i_used=%d, <%d>, used_count=%d", i_used, i, m_used_count);
+	int used_count = m_used_count;
+	WriteToEventLog("xsys_tcp_server2: Close i_used=%d, <%d>, used_count=%d", i_used, i, used_count);
 	session_close(i);
 
-	--m_used_count;
-	if (m_used_count > i_used)	// 用于防护意外
-		memmove(m_pused_index + i_used, m_pused_index+i_used+1, (m_used_count-i_used)*sizeof(int));
+	--used_count;
+
+	if (used_count > i_used)	// 用于防护意外
+		memmove(m_pused_index + i_used, m_pused_index+i_used+1, (used_count-i_used)*sizeof(int));
+	m_used_count = used_count;
 
 	return i;
 }
 
 int xsys_tcp_server2::session_close_used_by_i(int i_session)
 {
-	if (i_session < 0 || i_session >= m_session_count)
-		return i_session;
+	if (!XTCP2SESSION_INRANGE(i_session))
+		return -1;
 
 	int i;
 	for (i = m_used_count-1; i >= 0 && m_pused_index[i] != i_session; i--)
@@ -83,7 +92,7 @@ int xsys_tcp_server2::session_close_used_by_i(int i_session)
 		return session_close_used(i);
 
 	WriteToEventLog("使用队列中没找到，直接关闭<%d>", i_session);
-	
+
 	session_close(i_session);
 
 	return i_session;
@@ -152,7 +161,6 @@ bool xsys_tcp_server2::open(const char * url,int ttl, int recv_len)
 void xsys_tcp_server2::run(void)
 {
 	static const char szFunctionName[] = "xsys_tcp_server2::run";
-
 	WriteToEventLog("%s : in.\n", szFunctionName);
 
 	// 启动发送线程
@@ -161,14 +169,16 @@ void xsys_tcp_server2::run(void)
 
 	if (m_msg_thread.m_thread == SYS_INVALID_THREAD)
 		m_msg_thread.init(run_msg_thread, this);
-	
+
+	m_close_requests.set_timeout_ms(5);
+
 	xsys_sleep_ms(500);
 	// wait the other worker in ready
 	// xsys_sleep_ms(100);
 
 	int	session_i = 0;		/// 循环查找起始位置
 
-	int i, conn_amount = 0, n, idle_times = 0, trytimes = 0;
+	int i, conn_amount = 0, n, idle_times = 0, trytimes = 0, error_recv = 0;
 	int not_full_packet_count = 0;
 
 	if (!m_listen_sock.isopen() && m_listen_sock.listen(m_listen_port) != 0){
@@ -177,16 +187,29 @@ void xsys_tcp_server2::run(void)
 	}
 
 	fd_set fdsr;
+	memset(&fdsr, 0, sizeof(fdsr));
+
 	struct timeval tv;
 
+	int s_used_count = 0;
+
 	while (m_isrun && trytimes < 3 && m_listen_sock.isopen()) {
+		int used_count = m_used_count;
+		if (used_count != s_used_count){
+			WriteToEventLog("%s: 计数不等, %d, %d", szFunctionName, used_count, s_used_count);
+			m_used_count = used_count = s_used_count;
+		}
+
 		// 检查关闭连接请求
 		while (!m_close_requests.isempty()){
 			i = -1;
 			n = m_close_requests.get_free((long *)&i, m_precv_buf);
 			if (n == 0){
 				WriteToEventLog("%s: get close %d request", szFunctionName, i);
-				session_close_used_by_i(i);
+				lock_prop(2);
+				if (session_close_used_by_i(i) >= 0)
+					s_used_count--;
+				unlock_prop();
 			}
 			// xsys_sleep_ms(10);
 		}
@@ -194,16 +217,17 @@ void xsys_tcp_server2::run(void)
 		m_heartbeat = long(time(0));
 
 		// check timeout or idle
+		lock_prop(1);
 		{
-			int n = m_used_count;
+			n = s_used_count;
 			int i;
-			for (i = m_used_count-1; i >= 0; i--){
+			for (i = s_used_count-1; i >= 0; i--){
 				int isession = m_pused_index[i];
 
 				if (XSYS_TCP_SESSION_TIMEOUT(isession)){
-					WriteToEventLog("%s: client[%d/%d] timeout[%d/20](%d - %d)", szFunctionName, i, isession, m_session_ttl, int(m_psessions[isession].createTime), m_heartbeat);
-					// 由于close之后，m_used_count会减1，且之后的会前移，故此i保持不变
+					WriteToEventLog("%s: client[%d/%d] timeout[%d/20](%d - %d - %d)", szFunctionName, i, isession, m_session_ttl, int(m_psessions[isession].createTime), m_psessions[isession].last_recv_time, m_heartbeat);
 					session_close_used(i);
+					s_used_count--;
 				}else if (m_psessions[isession].idle_secs > 0 &&
 					m_heartbeat >= m_psessions[isession].last_trans_time + m_psessions[isession].idle_secs)
 				{
@@ -212,8 +236,19 @@ void xsys_tcp_server2::run(void)
 					notify_do_cmd(parms);
 				}
 			}
-			if (n > 0 && m_used_count < 1)
+			if (n > 0 && s_used_count < 1){
 				m_recv_queue.clear();
+			}
+		}
+		unlock_prop();
+
+		if (error_recv > 0){
+			/*
+			m_listen_sock.close();
+			xsys_sleep_ms(5);
+			m_listen_sock.listen(m_listen_port);
+			//*/
+			error_recv = 0;
 		}
 
 		// get network event
@@ -224,7 +259,7 @@ void xsys_tcp_server2::run(void)
 
 		// add active connection to fd set
 		n = m_listen_sock.m_sock;
-		for (i = 0; i < m_used_count; i++) {
+		for (i = 0; i < s_used_count; i++) {
 			int i_session = m_pused_index[i];
 			if (XSYS_VALID_SOCK(m_psessions[i_session].sock)) {
 				FD_SET(m_psessions[i_session].sock, &fdsr);
@@ -237,7 +272,7 @@ void xsys_tcp_server2::run(void)
 
 		m_heartbeat = long(time(0));
 
-		int ret = ::select(n+1, &fdsr, NULL, NULL, &tv);
+		int ret = ::select(n, &fdsr, NULL, NULL, &tv);
 
 		if (ret < 0) {
 			WriteToEventLog("%s: select error(%d), loop end", szFunctionName, ret);
@@ -246,6 +281,7 @@ void xsys_tcp_server2::run(void)
 			m_idle = 3;
 			break;
 		}
+
 		trytimes = 0;
 
 		if (!m_isrun)
@@ -267,11 +303,12 @@ void xsys_tcp_server2::run(void)
 
 		// 找session，并检查timeout的会话
 		int j;
-		for (j = m_used_count-1; j >= 0; j--){
+		for (j = s_used_count-1; j >= 0; j--){
 			i = m_pused_index[j];
 			if (!PSESSION_ISOPEN(m_psessions+i)){
 				WriteToEventLog("%s: ERROR used[%d] session(%d) is not open!", szFunctionName, j, i);
 				session_close_used(j);
+				s_used_count--;
 				continue;
 			}
 
@@ -281,6 +318,7 @@ void xsys_tcp_server2::run(void)
 					WriteToEventLog("%s: <%d> timeout[%d](%d - %d)", szFunctionName, i, m_session_ttl, int(m_psessions[i].createTime), m_heartbeat);
 
 					session_close_used(j);
+					s_used_count--;
 				}else if (m_psessions[i].idle_secs > 0 &&
 					m_heartbeat >= m_psessions[i].last_trans_time + m_psessions[i].idle_secs)
 				{
@@ -301,18 +339,23 @@ void xsys_tcp_server2::run(void)
 			if (len < 0) {        // client close
 				WriteToEventLog("%s: client<%d> close, recv return [%d]", szFunctionName, i, len);
 				session_close_used(j);
+				s_used_count--;
+				++error_recv;
 				continue;
 			}
 
 			if (len == 0){
 				WriteToEventLog("%s: client<%d> recved 0 bytes, will be closed", szFunctionName, i);
 				session_close_used(j);
+				s_used_count--;
+				++error_recv;
 				continue;
 			}
 
 			write_buf_log(szFunctionName, (unsigned char *)m_precv_buf, len);
 
 			// receive data
+			m_psessions[i].recv_sum += len;	// increase the sum
 			m_precv_buf[len] = '\0';
 			WriteToEventLog("%s: client[%d/sock=%d, len=%d]", szFunctionName, i, sock, len);
 			int r;
@@ -324,10 +367,10 @@ void xsys_tcp_server2::run(void)
 				r = m_recv_queue.put(i, m_precv_buf, len);
 				m_psessions[i].recv_state = XTS_RECV_READY;
 				WriteToEventLog("%s: <%d/%d> - send to recv_queue", szFunctionName, i, m_psessions[i].sock);
-				xsys_sleep_ms(50);
+				xsys_sleep_ms(5);
 				continue;
 			}
-				
+
 			// 需要和上次接收合并处理的情况
 			session_recv(i, len);	// 将数据存入session的临时缓存
 
@@ -371,24 +414,26 @@ void xsys_tcp_server2::run(void)
 				WriteToEventLog("%s: %d/%d - recv error(%d)", szFunctionName, i, m_psessions[i].sock, r);
 				write_buf_log(szFunctionName, (unsigned char *)m_psessions[i].precv_buf, m_psessions[i].recv_len);
 				i = session_close_used(j);
+				s_used_count--;
 				break;
 
 			case XTS_RECV_EXCEPT:
 			case XTS_SESSION_END:
 				i = session_close_used(j);
+				s_used_count--;
 				break;
 			}
 		}
 
 		if (FD_ISSET(m_listen_sock.m_sock, &fdsr)) {
 			// find a free session
-			int j = session_i;
+			int k = session_i;
 			for (i = 0; i < m_session_count; i++){
-				if (!(PSESSION_ISOPEN(m_psessions+j)))
+				if (!(PSESSION_ISOPEN(m_psessions+k)))
 					break;
-				++j;
-				if (j == m_session_count)
-					j = 0;
+				++k;
+				if (k == m_session_count)
+					k = 0;
 			}
 			SYS_SOCKET sock = SYS_INVALID_SOCKET;
 			n = m_listen_sock.accept(sock);
@@ -402,11 +447,22 @@ void xsys_tcp_server2::run(void)
 				continue;
 			}
 
-			m_psessions[j].sock = sock;
-			session_open(j);
-			m_pused_index[m_used_count++] = j;
+			m_heartbeat = long(time(0));
+			/*
+			int active = 1;
+			n = setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char const*)&active, sizeof(active));
+			//*/
+			m_psessions[k].sock = sock;
+			session_open(k);
+			m_pused_index[s_used_count++] = k;
+			m_used_count++;
+			char ip[32];
+			ip[0] = 0;
+			xsys_socket s;
+			s.m_sock = sock;  s.get_peer_ip(ip);  s.m_sock = SYS_INVALID_SOCKET;
+			WriteToEventLog("%s: new client(%d/%d) %d %s", szFunctionName, k, s_used_count, m_heartbeat, ip);
 
-			session_i = j+1;
+			session_i = k+1;
 			if (session_i == m_session_count)
 				session_i = 0;
 		}
@@ -432,13 +488,16 @@ void xsys_tcp_server2::msg_server(void)
 		if (!m_isrun || (isession == -1 && len == 4 && memcmp(ptemp_buf, "stop", 4) == 0))
 			break;
 
+		if (len == ERR_TIMEOUT)
+			continue;
+
 		if (len <= 0){
 			WriteToEventLog("%s : len = %d, no data", szFunctionName, len);
 			continue;
 		}
 
 		int r;
-		if (isession < 0 || isession >= m_session_count){
+		if (!XTCP2SESSION_INRANGE(isession)){
 			if (isession == -1){
 				if (strcmp(ptemp_buf, "stop") == 0)
 					break;
@@ -447,18 +506,23 @@ void xsys_tcp_server2::msg_server(void)
 					// set session
 					isession = atoi(ptemp_buf+5);
 					r = do_idle(isession);
-					continue;
+
+					if (r == XSYS_IP_FATAL)
+						notify_close_session(isession);
 				}
 			}else{
 				WriteToEventLog("%s: <%d>, len = %d, 超出会话界限,忽略", szFunctionName, isession, len);
-				continue;
 			}
+
+			continue;
 		}
 
 		/// 调用处理函数进行消息处理
 		r = do_msg(isession, ptemp_buf, len);
-
 		WriteToEventLog("%s : <%d/%d>处理%d长的数据，返回%d", szFunctionName, isession, m_psessions[isession].sock, len, r);
+
+		if (r == XSYS_IP_FATAL)
+			notify_close_session(isession);
 	}
 
 	::free(ptemp_buf);
@@ -490,7 +554,7 @@ void xsys_tcp_server2::send_server(void)
 			continue;
 		}
 
-		if (i_session < 0 || i_session >= m_session_count){
+		if (!XTCP2SESSION_INRANGE(i_session)){
 			WriteToEventLog("%s: <%d>, len = %d, 超出会话界限,忽略", szFunctionName, i_session, len);
 			continue;
 		}
@@ -510,8 +574,12 @@ void xsys_tcp_server2::send_server(void)
 				notify_close_session(i);
 			}else{
 				WriteToEventLog("%s: the %dth session sent (ret = %d, len=%d)", szFunctionName, i, r, len);
+
+				lock_prop(1);
 				m_psessions[i].last_trans_time = t;
 				m_psessions[i].sent_len = r;
+				unlock_prop();
+
 				on_sent(i, r);
 			}
 		}
@@ -538,25 +606,27 @@ bool xsys_tcp_server2::stop(int secs)
 	static const char szFunctionName[] = "xsys_tcp_server2::stop";
 
 	WriteToEventLog("%s: in", szFunctionName);
+	
+	if (!m_isrun)
+		return true;
+
 	m_isrun = false;
 
 	m_listen_sock.close();
-	xsys_sleep_ms(300);
+	xsys_sleep_ms(10);
 
 	// notify recver stop
-	m_recv_queue.put(-1, "stop", 4);
-	xsys_sleep_ms(100);
+	notify_do_cmd("stop");
 
 	// notify sender thread stop
-	m_send_queue.put(-1, "stop", 4);
-	xsys_sleep_ms(100);
-
-	bool isok = xwork_server::stop(secs);
+	this->send(-1,"stop",4);
 
 	xsys_sleep_ms(100);
 
 	m_send_thread.down();
 	m_msg_thread.down();
+
+	bool isok = xwork_server::stop(secs);
 
 	WriteToEventLog("%s: out(%d)", szFunctionName, isok);
 
@@ -569,19 +639,18 @@ bool xsys_tcp_server2::close(int secs)
 
 	WriteToEventLog("%s[%d] : in", szFunctionName, secs);
 
-	bool isok = xwork_server::close(secs);	// 调用 stop
+	bool isok = stop(secs);
 
-	m_recv_queue.down();
-	m_send_queue.down();
-
-	xsys_sleep_ms(10);
-
-	m_close_requests.down();
+	isok = xwork_server::close(secs);	// 调用 stop
 
 	if (m_psessions){
 		close_all_session();
 		::free(m_psessions);  m_psessions = 0;
 	}
+
+	m_recv_queue.down();
+	m_send_queue.down();
+	m_close_requests.down();
 
 	if (m_pused_index){
 		::free(m_pused_index);  m_pused_index = 0;
@@ -608,7 +677,7 @@ void xsys_tcp_server2::session_open(int i)
 
 	psession->createTime =
 		psession->last_recv_time  =
-		psession->last_trans_time = m_heartbeat;
+		psession->last_trans_time = m_heartbeat-1;
 
 	psession->peerid = -1;
 	psession->running_cmdid = -1;
@@ -650,7 +719,7 @@ void xsys_tcp_server2::session_close(xtcp2_session * psession)
 
 bool xsys_tcp_server2::session_isopen(int i)
 {
-	if (i < 0 || i >= m_session_count)
+	if (!XTCP2SESSION_INRANGE(i))
 		return false;
 
 	xtcp2_session * psession = m_psessions + i;
@@ -661,14 +730,13 @@ void xsys_tcp_server2::session_close(int i)
 {
 	static const char szFunctionName[] = "xsys_tcp_server2::session_close";
 
-	if (i < 0 || i >= m_session_count){
+	if (!XTCP2SESSION_INRANGE(i)){
 		WriteToEventLog("%s: i = %d is out range[0~%d]", szFunctionName, i, m_session_count);
 		return;
 	}
 
-	WriteToEventLog("%s: i = %d will be closed", szFunctionName, i);
-
 	xtcp2_session * psession = m_psessions + i;
+	WriteToEventLog("%s: i = %d(%d, %d) will be closed", szFunctionName, i, psession->recv_sum, m_heartbeat-psession->createTime);
 	if (!PSESSION_ISOPEN(psession)){
 		WriteToEventLog("%s: i = %d is not opened", szFunctionName, i);
 	}else{
@@ -705,7 +773,7 @@ int xsys_tcp_server2::session_recv_to_queue(int i, int len)
 		WriteToEventLog("会话%d已关闭，不发送", i);
 		return 0;
 	}
-	
+
 	if (len > psession->recv_len)
 		len = psession->recv_len;
 
@@ -750,13 +818,14 @@ int xsys_tcp_server2::send(int isession, const char * s, int len)
 {
 	static const char szFunctionName[] = "xsys_tcp_server2::send";
 
-	if (isession < 0 || isession >= m_session_count ||
-		!PSESSION_ISOPEN(m_psessions+isession))
+	if ((isession != -1 || len != 4) &&
+		(!XTCP2SESSION_INRANGE(isession) || !PSESSION_ISOPEN(m_psessions+isession))
+	)
 	{
-		WriteToEventLog("%s: 出错,试图在未打开的会话(%d)上发送(len=%d)\n%s", szFunctionName, isession, len, s);
+		WriteToEventLog("%s: 出错,试图在未打开的会话(%d)上发送(len=%d)\n", szFunctionName, isession, len);
+		write_buf_log(szFunctionName, (unsigned char *)s, len);
 		return -1;
 	}
-	m_psessions[isession].last_trans_time = long(time(0));
 	return m_send_queue.put(isession, s, len);
 }
 

@@ -33,7 +33,7 @@ int xseq_buf::init(int bufsize, int uses)
 		bufsize = 4;
 	bufsize *= 1024;
 
-	m_pbuf = (char *)calloc(bufsize, 1);
+	m_pbuf = (char *)calloc(bufsize+sizeof(int), 1);
 	if (m_pbuf == 0)
 		return -1;
 
@@ -158,9 +158,10 @@ int xseq_buf::put(long id, const void * s, int len)
 	}else
 		use.len = 0;
 
-	m_psem->V();
-
 	m_hmutex->unlock();
+
+	if (use.len > 0)
+		m_psem->V();
 
 	return use.len;
 }

@@ -38,7 +38,7 @@ public:
 
 	void set_timeout_ms(long ms)
 	{
-		if (ms < 10)  m_timeout_ms = 10;
+		if (ms < 5)  m_timeout_ms = 5;
 		else
 			m_timeout_ms = ms;
 	}

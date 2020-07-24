@@ -4,6 +4,8 @@
 
 #include "test_tcp.h"
 
+#include <thread> t1;
+
 #ifdef WIN32
 #include <crtdbg.h>
 
@@ -15,6 +17,9 @@
 char b[128*1024];
 
 using namespace std;
+
+static unsigned int recv_show(void * pvoid);
+xseq_buf	g_queue;			/// 测试队列
 
 int g_port;
 
@@ -36,6 +41,8 @@ int main(int argc, char **argv)
 
 	xsys_init(true);
 
+	std::thread h1(recv_show, nullptr);
+
 	openservicelog("test_tcp.log", true, 60, true, "./");
 
 	/*
@@ -52,8 +59,7 @@ int main(int argc, char **argv)
 	//*/
 
 	test_tcp * ptcp = new test_tcp("TCP-测试",10);	///测试tcp服务
-	xseq_buf	t_sends;			/// 测试队列	
-	t_sends.init(32, 1000);
+	g_queue.init(32, 1000);
 	int i=1;
 	ptcp->m_idle = 30;
 	ptcp->m_works= 2;
@@ -71,17 +77,22 @@ int main(int argc, char **argv)
 			cout<< "command:stop" <<endl;
 			ptcp->stop();
 			ptcp->close();
-		}else if (strcmp(b,"put")==0)
+		}else if (strncmp(b, "put", 3)==0)
 		{
-			cout<< "put:" <<i <<endl;
-			char temp[10];
-			sprintf(temp,"TestData%d",i);
-			t_sends.put(i,temp);
+			if (b[3] == ':'){
+				const char * p = getaword(b, b+4);
+				g_queue.put(atoi(b), p);
+			}else{
+				cout << "put:" << i << endl;
+				char temp[10];
+				sprintf(temp, "TestData%d", i);
+				g_queue.put(i, temp);
+			}
 			i++;
 		}else if (strcmp(b,"get")==0)
 		{
 			xseq_buf_use use;
-			int r = t_sends.get(&use);
+			int r = g_queue.get(&use);
 			if(r>=0){
 				cout << "get:(id=" << use.id <<") " << use.p  <<endl;
 				i--;
@@ -121,8 +132,10 @@ int main(int argc, char **argv)
 			cout<<"7 '|'  退出" << endl;
 		}
 	}
+	g_queue.put(-1, "");
+	t1.join();
 
-	t_sends.down();
+	g_queue.down();
 	delete ptcp;
 
 	closeservicelog();
@@ -138,6 +151,28 @@ int main(int argc, char **argv)
 	}
 #endif // _DEBUG
 #endif // WIN32
+
+	return 0;
+}
+
+
+static unsigned int recv_show(void * pvoid)
+{
+	char aline[512];
+
+//	char old_ip[MAX_IP_LEN];
+//	char ip[MAX_IP_LEN];
+//	old_ip[0] = ip[0] = 0;
+
+	is_run = true;
+
+	printf("recver: start.\n");
+
+	int l = 1, i, n, r;
+	while ((len = m_recv_queue.get_free((long *)(&i), aline)) > 0){
+		printf("%d <-:\n", i+1);
+		write_buf_log("RECV", (unsigned char *)aline, l);
+	}
 
 	return 0;
 }

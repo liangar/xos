@@ -49,8 +49,9 @@ int read_file (char ** d, const char * filename, long startpos, char * msg, int 
 	}
 
 	if (startpos > 0) {
-		if (_lseek(h, startpos, SEEK_SET) < 0){
-			xsnprintf(msg, lmsg, "rf_error[%d] : cannot seek the file[%s](%d).", filename, startpos);
+		int r;
+		if ((r = _lseek(h, startpos, SEEK_SET)) < 0){
+			xsnprintf(msg, lmsg, "rf_error[%d] : cannot seek the file[%s](%d).", r, filename, startpos);
 			free(buffer);
 			close(h);
 			return -2;
@@ -102,8 +103,9 @@ int read_file (char  * d, const char * filename, long startpos, char * msg, int 
 	}
 
 	if (startpos > 0) {
-		if (_lseek(h, startpos, SEEK_SET) < 0){
-			xsnprintf(msg, lmsg, "rf_error[%d] : cannot seek the file[%s](%d).", filename, startpos);
+		int r;
+		if ((r = _lseek(h, startpos, SEEK_SET)) < 0){
+			xsnprintf(msg, lmsg, "rf_error[%d] : cannot seek the file[%s](%d).", r, filename, startpos);
 			return -2;
 		}
 		l -= startpos;
@@ -152,7 +154,7 @@ int write_file(const char * filename, const char * s, int len, char * msg, int l
 
 	if (i != len){
 		if (msg != NULL && lmsg > 0)
-			xsnprintf(msg, lmsg, "%s : write %d bytes, and return %d.", szFunctionName, i);
+			xsnprintf(msg, lmsg, "%s : write %d bytes, and return %d.", szFunctionName, len, i);
 	}
 	return i;
 }
