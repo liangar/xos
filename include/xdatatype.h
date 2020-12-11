@@ -127,6 +127,7 @@ typedef struct tagXParm{    // ²ÎÊıÃèÊö
 	union {                // Öµ
 		short   * pshort;
         int     * pi;
+		long	* pl;
 		float   * pf;
         double  * pd;
         char    * ps;

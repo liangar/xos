@@ -66,17 +66,27 @@ xlist<T>::~xlist()
 template <class T>
 int xlist<T>::init(int ncount, int nstep)
 {
-	down();
-
-	if (ncount < 1 || ncount > 32 * 1024)
+	if (ncount < 1)
 		ncount = 8;
-	if (nstep < 1 || nstep > 32 * 1024)
+	if (nstep < 1)
 		nstep = 8;
+	else if (nstep > 8 * 1024)
+		nstep = 8 * 1024;
 
-	m_phandles = (T *)calloc(ncount, sizeof(T));
-	if (m_phandles == 0)
+	int count = m_all;
+	int new_count = ncount - count;
+	if (new_count <= 0)
+		return 0;
+
+	T * p = (T *)realloc(m_phandles, ncount * sizeof(T));
+	if (p == 0)
 		return -1;
-	m_count = 0;
+	m_phandles = p;
+
+	if (new_count > 0)
+		memset(m_phandles + count, 0, new_count * sizeof(T));
+
+	// m_count = 0;
 	m_all = ncount;
 	m_nstep = nstep;
 
@@ -104,12 +114,18 @@ bool xlist<T>::increate_a_step(void)
 		m_count = 0;
 	}
 
+	if (m_all >= l)
+		return true;
+
 	// 分配空间
 	T * p;
 	if (m_phandles == 0)
 		p = (T *)calloc(l, sizeof(T));
-	else
-		p = (T *)realloc(m_phandles, sizeof(T) * l);
+	else {
+		p = (T*)realloc(m_phandles, sizeof(T) * l);
+		if (p)
+			memset(p + m_count, 0, sizeof(T) * m_nstep);
+	}
 
 	if (p == 0)  return false;
 
@@ -125,9 +141,6 @@ bool xlist<T>::add(const T * h)
 {
 	if (h == 0)  return true;
 
-	if (m_count < 0 || m_all < 1)
-		init(1, m_nstep);
-	
 	if (m_all <= m_count){
 		if (!increate_a_step())
 			return false;
@@ -296,17 +309,27 @@ xlist_s<T>::~xlist_s()
 template <class T>
 int xlist_s<T>::init(int ncount, int nstep)
 {
-	down();
-
-	if (ncount < 1 || ncount > 32 * 1024)
+	if (ncount < 1)
 		ncount = 8;
-	if (nstep < 1 || nstep > 32 * 1024)
+	if (nstep < 1)
 		nstep = 8;
+	else if (nstep > 8 * 1024)
+		nstep = 8 * 1024;
 
-	m_phandles = (T *)calloc(ncount, sizeof(T));
-	if (m_phandles == 0)
+	int count = m_all;
+	int new_count = ncount - count;
+	if (new_count <= 0)
+		return 0;
+		
+	T * p = (T*)realloc(m_phandles, ncount * sizeof(T));
+	if (p == 0)
 		return -1;
-	m_count = 0;
+	m_phandles = p;
+
+	if (new_count > 0)
+		memset(m_phandles + count, 0, new_count * sizeof(T));
+
+	// m_count = 0;
 	m_all = ncount;
 	m_nstep = nstep;
 
@@ -333,6 +356,9 @@ bool xlist_s<T>::increate_a_step(void)
 			m_nstep = l = 8;
 		m_count = 0;
 	}
+
+	if (m_all >= l)
+		return true;
 
 	// 分配空间
 	T * p;

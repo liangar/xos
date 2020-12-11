@@ -310,7 +310,7 @@ const char * xmail::save_attach(const mailpart * part, const char * path)
 	if (path && * path){
 		strcpy(fullpath, path);
 		int l = int(strlen(fullpath));
-		if (fullpath[l-1] != '/' || fullpath[l-1] != '\\')
+		if (fullpath[l-1] != '/' && fullpath[l-1] != '\\')
 			fullpath[l++] = '\\';
 		strcpy(fullpath + l, part->filename);
 	}

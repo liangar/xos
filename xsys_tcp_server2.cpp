@@ -14,7 +14,7 @@ unsigned int xsys_tcp_server2::run_send_thread(void * ptcp_server)
 		xsys_tcp_server2 * pserver = (xsys_tcp_server2 *)ptcp_server;
 		pserver->send_server();
 	}catch(...){
-		WriteToEventLog("xsys_tcp_server2::send_server: an exception occured.");
+		WriteToEventLog("XTCP2::send_server: an exception occured.");
 	}
 	return 0;
 }
@@ -25,7 +25,7 @@ unsigned int xsys_tcp_server2::run_msg_thread(void * ptcp_server)
 		xsys_tcp_server2 * pserver = (xsys_tcp_server2 *)ptcp_server;
 		pserver->msg_server();
 	}catch(...){
-		WriteToEventLog("xsys_tcp_server2::msg_server: an exception occured.");
+		WriteToEventLog("XTCP2::msg_server: an exception occured.");
 	}
 	return 0;
 }
@@ -67,7 +67,7 @@ int xsys_tcp_server2::session_close_used(int i_used)
 	int i = m_pused_index[i_used];
 
 	int used_count = m_used_count;
-	WriteToEventLog("xsys_tcp_server2: Close i_used=%d, <%d>, used_count=%d", i_used, i, used_count);
+	WriteToEventLog("XTCP2: Close i_used=%d, <%d>, used_count=%d", i_used, i, used_count);
 	session_close(i);
 
 	--used_count;
@@ -91,7 +91,7 @@ int xsys_tcp_server2::session_close_used_by_i(int i_session)
 	if (i >= 0)
 		return session_close_used(i);
 
-	WriteToEventLog("使用队列中没找到，直接关闭<%d>", i_session);
+	WriteToEventLog("使用队列中没找到,直接关闭<%d>", i_session);
 
 	session_close(i_session);
 
@@ -100,7 +100,7 @@ int xsys_tcp_server2::session_close_used_by_i(int i_session)
 
 void xsys_tcp_server2::timeout_check(void)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::timeout_check";
+	static const char szFunctionName[] = "XTCP2::timeout_check";
 
 	int i;
 
@@ -145,7 +145,7 @@ bool xsys_tcp_server2::open(int listen_port, int ttl, int max_sessions, int recv
 	m_send_queue.init(max(4, (send_len+1023)/1024*(max_sessions/5+2)), max(max_sessions/2+1, 4));
 	m_close_requests.init(4, max_sessions/2+1);
 
-	WriteToEventLog("xsys_tcp_server2::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
+	WriteToEventLog("XTCP2::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
 		m_session_ttl, max_sessions, m_recv_len, m_send_len
 	);
 
@@ -160,7 +160,7 @@ bool xsys_tcp_server2::open(const char * url,int ttl, int recv_len)
 
 void xsys_tcp_server2::run(void)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::run";
+	static const char szFunctionName[] = "XTCP2::run";
 	WriteToEventLog("%s : in.\n", szFunctionName);
 
 	// 启动发送线程
@@ -473,11 +473,13 @@ void xsys_tcp_server2::run(void)
 
 void xsys_tcp_server2::msg_server(void)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::msg_server";
+	static const char szFunctionName[] = "XTCP2::msg_server";
 
 	WriteToEventLog("%s : in/%d", szFunctionName, m_recv_len);
 
 	char * ptemp_buf = (char *)calloc(1, m_recv_len+1);
+	if (ptemp_buf == nullptr)
+		return;
 
 	m_recv_queue.set_timeout_ms(120*1000);
 	while (m_isrun){
@@ -532,7 +534,7 @@ void xsys_tcp_server2::msg_server(void)
 
 void xsys_tcp_server2::send_server(void)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::send_server";
+	static const char szFunctionName[] = "XTCP2::send_server";
 
 	WriteToEventLog("%s : in.\n", szFunctionName);
 
@@ -603,7 +605,7 @@ void xsys_tcp_server2::close_all_session(void)
 
 bool xsys_tcp_server2::stop(int secs)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::stop";
+	static const char szFunctionName[] = "XTCP2::stop";
 
 	WriteToEventLog("%s: in", szFunctionName);
 	
@@ -635,7 +637,7 @@ bool xsys_tcp_server2::stop(int secs)
 
 bool xsys_tcp_server2::close(int secs)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::close";
+	static const char szFunctionName[] = "XTCP2::close";
 
 	WriteToEventLog("%s[%d] : in", szFunctionName, secs);
 
@@ -697,7 +699,7 @@ int xsys_tcp_server2::notify_close_session(int i)
 
 void xsys_tcp_server2::session_close(xtcp2_session * psession)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::session_close";
+	static const char szFunctionName[] = "XTCP2::session_close";
 
 	SYS_SOCKET sock = psession->sock;
 
@@ -728,7 +730,7 @@ bool xsys_tcp_server2::session_isopen(int i)
 
 void xsys_tcp_server2::session_close(int i)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::session_close";
+	static const char szFunctionName[] = "XTCP2::session_close";
 
 	if (!XTCP2SESSION_INRANGE(i)){
 		WriteToEventLog("%s: i = %d is out range[0~%d]", szFunctionName, i, m_session_count);
@@ -816,7 +818,7 @@ int xsys_tcp_server2::session_recv(int i, int len)
 
 int xsys_tcp_server2::send(int isession, const char * s, int len)
 {
-	static const char szFunctionName[] = "xsys_tcp_server2::send";
+	static const char szFunctionName[] = "XTCP2::send";
 
 	if ((isession != -1 || len != 4) &&
 		(!XTCP2SESSION_INRANGE(isession) || !PSESSION_ISOPEN(m_psessions+isession))

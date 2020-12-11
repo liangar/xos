@@ -1,15 +1,15 @@
 #include <xseq_buf.h>
 
 xseq_buf::xseq_buf()
-	: m_hmutex(0)
-	, m_pbuf(0)
-	, m_p_head_free(0)
-	, m_p_tail_free(0)
+	: m_hmutex(nullptr)
+	, m_pbuf(nullptr)
+	, m_p_head_free(nullptr)
+	, m_p_tail_free(nullptr)
 {
 	m_buf_size = m_head_free_size = m_tail_free_size = 0;
 	m_last_alloc = 0;
 	m_timeout_ms = 2000;
-	m_psem = 0;
+	m_psem = nullptr;
 }
 
 xseq_buf::~xseq_buf()
@@ -69,19 +69,19 @@ int xseq_buf::down(void)
 {
 	m_uses.close();
 	if (m_pbuf){
-		::free(m_pbuf);  m_pbuf = 0;
-		m_p_head_free = m_p_tail_free = 0;
+		::free(m_pbuf);  m_pbuf = nullptr;
+		m_p_head_free = m_p_tail_free = nullptr;
 		m_buf_size = m_head_free_size = m_tail_free_size = 0;
 	}
 	if (m_psem){
 		m_psem->down();
 		delete m_psem;
-		m_psem = 0;
+		m_psem = nullptr;
 	}
 	if (m_hmutex) {
 		m_hmutex->down();
 		delete m_hmutex;
-		m_hmutex =0;
+		m_hmutex =nullptr;
 	}
 
 	return 0;
@@ -122,7 +122,7 @@ int xseq_buf::put(long id, const void * s, int len)
 {
 	// 2016-06-06 len < 1 -> < 0 liangar
 	// 允许 0 长度的数据入列
-	if ((s == 0 && len > 0) || len < 0)
+	if ((s == 0 && len > 0) || len < 0 || m_hmutex == nullptr)
 		return 0;
 
 	int r;
@@ -160,8 +160,7 @@ int xseq_buf::put(long id, const void * s, int len)
 
 	m_hmutex->unlock();
 
-	if (use.len > 0)
-		m_psem->V();
+	m_psem->V();
 
 	return use.len;
 }

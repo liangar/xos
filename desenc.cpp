@@ -61,6 +61,9 @@ int des_encode(deshandle h, char * d, char * s, int len)
 		l = 0;
 
 	char * p = (char *)calloc(len+l, 1);
+	if (p == nullptr)
+		return -1;
+
 	memcpy(p, s, len);  l += len;
 
 	for (len = 0, s = p; len < l; len += 8, d += 8, s += 8){

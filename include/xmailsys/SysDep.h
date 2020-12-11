@@ -63,7 +63,7 @@ enum SysFileTypes {
 };
 
 struct SYS_FILE_INFO {
-	int iFileType;
+    SysFileTypes iFileType;
 	SYS_OFF_T llSize;
 	time_t tMod;
 };

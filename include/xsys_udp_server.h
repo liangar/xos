@@ -2,7 +2,8 @@
 
 #include <xsys_tcp_server.h>
 
-#define PUDPSESSION_ISOPEN(p)	((p)->addr_crc != 0)
+#define PUDPSESSION_ISOPEN(p)	((p)->recv_state != XTS_SESSION_END)
+// ((p)->addr_crc != 0)
 
 struct xudp_session{
 	SYS_INET_ADDR	addr;	/// 通讯地址
@@ -15,7 +16,7 @@ struct xudp_session{
 	volatile int	peerid;			/// 连接对方的 id 标识, 给应用使用
 
 	/// recv
-	XTS_STATES	recv_state;	/// 接收状态
+	volatile XTS_STATES	recv_state;	/// 接收状态
 	char *  precv_buf;		/// 接收缓冲区
 	int		recv_len;		/// 当前所用的缓冲空间
 	int		recv_buflen;	/// 当前缓冲长度
@@ -102,7 +103,7 @@ protected:
 	int opened_find(bool &for_trans, int * crc, SYS_INET_ADDR * addr);
 
 	void session_open(int i);
-	void session_close(xudp_session * psession);
+//	void session_close(xudp_session * psession);
 	// 关闭已用标记的第i_used个会话，返回实际的序号
 	int  session_close_used(int i_used);
 	int session_close_used_by_i(int i_session);

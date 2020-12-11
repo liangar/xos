@@ -16,7 +16,7 @@ static unsigned int run_send_thread(void * pudp_server)
 		xsys_udp_server * pserver = (xsys_udp_server *)pudp_server;
 		pserver->send_server();
 	}catch(...){
-		WriteToEventLog("xsys_udp_server::send_server: an exception occured.");
+		WriteToEventLog("x_udp_svr::send_server: an exception occured.");
 	}
 	return 0;
 }
@@ -27,7 +27,7 @@ static unsigned int run_msg_thread(void * pudp_server)
 		xsys_udp_server * pserver = (xsys_udp_server *)pudp_server;
 		pserver->msg_server();
 	}catch(...){
-		WriteToEventLog("xsys_udp_server::msg_server: an exception occured.");
+		WriteToEventLog("x_udp_svr::msg_server: an exception occured.");
 	}
 	return 0;
 }
@@ -38,7 +38,7 @@ static unsigned int run_relay_thread(void * pudp_server)
 		xsys_udp_server * p = (xsys_udp_server *)pudp_server;
 		p->relay_server();
 	}catch(...){
-		WriteToEventLog("xsys_udp_server::msg_server: an exception occured.");
+		WriteToEventLog("x_udp_svr::msg_server: an exception occured.");
 	}
 	return 0;
 }
@@ -52,6 +52,8 @@ xsys_udp_server::xsys_udp_server()
 	, m_precv_buf(0)
 	, m_recv_len(0)
 	, m_session_idle(10)
+	, m_plisten_sock(nullptr)
+	, m_has_new_cmd(false)
 {
 	m_serverURL[0] = 0;
 	m_pused_index = NULL;
@@ -66,11 +68,12 @@ xsys_udp_server::xsys_udp_server(const char * name, int nmaxexception)
 	, m_session_count(0)
 	, m_precv_buf(0)
 	, m_recv_len(0)
+	, m_plisten_sock(nullptr)
+	, m_has_new_cmd(false)
 {
 	m_pused_index = NULL;
 	m_used_count = 0;
 	m_serverURL[0] = 0;
-	m_has_new_cmd = false;
 }
 
 static int calc_addr_crc(SYS_INET_ADDR * addr)
@@ -159,7 +162,7 @@ void xsys_udp_server::timeout_check(void)
  */
 int xsys_udp_server::opened_find(bool &for_trans, int * crc, SYS_INET_ADDR * addr)
 {
-	static const char szFunctionName[] = "xsys_udp_server::opened_find";
+	static const char szFunctionName[] = "x_udp_svr::opened_find";
 
 	if (!addr || !crc)
 		return -1;
@@ -214,6 +217,11 @@ bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 	m_precv_buf = (char *)calloc(m_recv_len+4, 1);
 
 	m_psessions = (struct xudp_session *)calloc(max_sessions, sizeof(struct xudp_session));
+	// set all is free
+	int i;
+	for (i = 0; i < max_sessions; i++)
+		m_psessions[i].recv_state = XTS_SESSION_END;
+
 	m_pused_index = (int *)calloc(max_sessions, sizeof(int));
 	m_session_count = max_sessions;
 
@@ -231,7 +239,7 @@ bool xsys_udp_server::open(int listen_port, int ttl, int max_sessions, int recv_
 		max(max_sessions/2+16, 4)
 	);
 
-	WriteToEventLog("xsys_udp_server::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
+	WriteToEventLog("x_udp_svr::open: TTL=%d, max session=%d, recv_len=%d, send_len=%d",
 		m_session_ttl, max_sessions, m_recv_len, m_send_len
 	);
 
@@ -249,11 +257,11 @@ bool xsys_udp_server::open(const char * url,int ttl, int recv_len)
 
 void xsys_udp_server::run(void)
 {
-	static const char szFunctionName[] = "xsys_udp_server::run";
+	static const char szFunctionName[] = "x_udp_svr::run";
 
 	WriteToEventLog("%s : in.\n", szFunctionName);
 
-	if (m_plisten_sock == NULL)
+	if (m_plisten_sock == nullptr)
 		m_plisten_sock = new xsys_socket;
 
 	if (!m_plisten_sock->isopen() && m_plisten_sock->udp_listen(m_listen_port) != 0){
@@ -391,7 +399,7 @@ void xsys_udp_server::run(void)
 		}
 
 		// 找session
-		bool bfor_relay;
+		bool bfor_relay = false;
 		int i = opened_find(bfor_relay, &crc, &from_addr);
 
 		{
@@ -443,8 +451,8 @@ void xsys_udp_server::run(void)
 				session_i = 0;
 		}else{
 			m_psessions[i].last_trans_time = m_psessions[i].last_recv_time = m_heartbeat;
-			m_psessions[i].recv_count++;
 		}
+		m_psessions[i].recv_count++;
 		unlock_prop();
 
 		// receive data
@@ -453,7 +461,7 @@ void xsys_udp_server::run(void)
 
 		m_heartbeat = time(0);
 		/// 判断转发, 首次接收时判断
-		if (m_psessions[i].recv_count == 1 && !bfor_relay){
+		if (m_psessions[i].recv_count <= 1 && !bfor_relay){
 			const char * prelay_url = get_target_url(i, m_precv_buf, len);
 			if (prelay_url){
 				xsys_socket sock;
@@ -471,6 +479,8 @@ void xsys_udp_server::run(void)
 			}
 		}
 
+		write_buf_log(szFunctionName, (unsigned char *)m_precv_buf, len);
+
 		/// 判断直接发送
 		if (m_psessions[i].recv_len == 0 && calc_msg_len(i, m_precv_buf, len) == len){
 			// 接收了完整包，直接送入处理队列
@@ -483,7 +493,7 @@ void xsys_udp_server::run(void)
 				WriteToEventLog("%s: <%d> - send(%d/%d) to recv_queue", szFunctionName, i, r, len);
 			}
 			m_psessions[i].recv_state = XTS_RECV_READY;
-			xsys_sleep_ms(50);
+			xsys_sleep_ms(10);
 			continue;
 		}
 
@@ -504,7 +514,7 @@ void xsys_udp_server::run(void)
 
 		if (r <= 0){
 			// 无效或无用数据，则释放
-			write_buf_log("xsys_udp_server recved INVALID data", (unsigned char *)m_precv_buf, len);
+			write_buf_log("x_udp_svr recved INVALID data", (unsigned char *)m_precv_buf, len);
 			m_psessions[i].recv_state = XTS_RECV_ERROR;
 		}else{
 			if (r <= m_psessions[i].recv_len)
@@ -546,11 +556,13 @@ void xsys_udp_server::run(void)
 
 void xsys_udp_server::msg_server(void)
 {
-	static const char szFunctionName[] = "xsys_udp_server::msg_server";
+	static const char szFunctionName[] = "x_udp_svr::msg_server";
 
 	WriteToEventLog("%s : in", szFunctionName);
 
 	char * ptemp_buf = (char *)calloc(1, m_recv_len+4);
+	if (ptemp_buf == nullptr)
+		return;
 
 	int idle = 120 * 1000;
 
@@ -565,12 +577,11 @@ void xsys_udp_server::msg_server(void)
 		memset(ptemp_buf, 0, m_recv_len);
 		int len = m_recv_queue.get_free((long *)(&isession), ptemp_buf);
 
+		WriteToEventLog("%s : len = %d - %d", szFunctionName, len, int(time(0)));
 		try{
 			if (len != ERR_TIMEOUT){
-				if (len <= 0){
-					WriteToEventLog("%s : len = %d, no data", szFunctionName, len);
+				if (len <= 0)
 					continue;
-				}
 
 				r = 0;
 				if (!XUDPSESSION_INRANGE(isession)){
@@ -593,8 +604,12 @@ void xsys_udp_server::msg_server(void)
 					}else
 						WriteToEventLog("%s: <%d>, len = %d, 超出会话界限,忽略", szFunctionName, isession, len);
 
-					if (r == XSYS_IP_FATAL)
-						notify_close_session(isession, false);
+					if (r == XSYS_IP_FATAL){
+						if (isession < 0)
+							idle = 120 * 1000;
+						else
+							notify_close_session(isession, false);
+					}
 
 					continue;
 				}
@@ -604,7 +619,7 @@ void xsys_udp_server::msg_server(void)
 				if (r == XSYS_IP_FATAL)
 					notify_close_session(isession, false);
 
-				WriteToEventLog("%s: <%d>处理%d长的数据，返回%d", szFunctionName, isession, len, r);
+				WriteToEventLog("%s: <%d>处理%d长的数据，返回%d - %d", szFunctionName, isession, len, r, int(time(0)));
 			}
 		}catch(...){
 			WriteToEventLog("%s: 出现执行异常", szFunctionName);
@@ -618,11 +633,13 @@ void xsys_udp_server::msg_server(void)
 
 void xsys_udp_server::send_server(void)
 {
-	static const char szFunctionName[] = "xsys_udp_server::send_server";
-
-	WriteToEventLog("%s : in.\n", szFunctionName);
+	static const char szFunctionName[] = "x_udp_svr::send_server";
 
 	char * ptemp_buf = (char *)calloc(1, m_send_len+1);
+	if (ptemp_buf == nullptr)
+		return;
+
+	WriteToEventLog("%s : in.\n", szFunctionName);
 
 	m_send_queue.set_timeout_ms(120*1000);
 
@@ -722,7 +739,7 @@ void xsys_udp_server::send_server(void)
 
 void xsys_udp_server::relay_server(void)
 {
-	static const char szFunctionName[] = "xsys_udp_relay_server";
+	static const char szFunctionName[] = "x_udp_relay_svr";
 
 	WriteToEventLog("%s: in", szFunctionName);
 
@@ -925,6 +942,9 @@ void xsys_udp_server::close_all_session(void)
 		for (int i = m_session_count-1; i > 0 ; i--) {
 			if (PUDPSESSION_ISOPEN(m_psessions+i)) {
 				session_close(i);
+				if (m_psessions[i].precv_buf){
+					::free(m_psessions[i].precv_buf);  m_psessions[i].precv_buf = 0;
+				}
 			}
 		}
 	}
@@ -932,7 +952,7 @@ void xsys_udp_server::close_all_session(void)
 
 bool xsys_udp_server::stop(int secs)
 {
-	static const char szFunctionName[] = "xsys_udp_server::stop";
+	static const char szFunctionName[] = "x_udp_svr::stop";
 
 	WriteToEventLog("%s: in", szFunctionName);
 	m_isrun = false;
@@ -969,7 +989,7 @@ bool xsys_udp_server::stop(int secs)
 
 bool xsys_udp_server::close(int secs)
 {
-	static const char szFunctionName[] = "xsys_udp_server::close";
+	static const char szFunctionName[] = "x_udp_svr::close";
 
 	WriteToEventLog("%s[%d] : in", szFunctionName, secs);
 
@@ -1007,6 +1027,10 @@ void xsys_udp_server::session_open(int i)
 {
 	xudp_session * psession = m_psessions + i;
 
+	if (psession->precv_buf){
+		free(psession->precv_buf);
+	}
+
 	memset(psession, 0, sizeof(xudp_session));
 
 	psession->idle_secs = m_session_idle;
@@ -1020,6 +1044,7 @@ void xsys_udp_server::session_open(int i)
 	psession->running_cmdid = -1;
 }
 
+/*
 void xsys_udp_server::session_close(xudp_session * psession)
 {
 	static const char szFunctionName[] = "xsys_udp_server::session_close";
@@ -1033,6 +1058,7 @@ void xsys_udp_server::session_close(xudp_session * psession)
 	psession->recv_state = XTS_SESSION_END;
 	psession->peerid = -1;
 }
+//*/
 
 int xsys_udp_server::notify_close_session(int i, bool need_shift)
 {
@@ -1041,7 +1067,7 @@ int xsys_udp_server::notify_close_session(int i, bool need_shift)
 //		++now;
 	int r = m_close_requests.put(i, (char *)&now, sizeof(now));
 
-	WriteToEventLog("udp_server notify_close_session: %d(r=%d) force=%d", i, r, (need_shift?1:0));
+	WriteToEventLog("x_udp_svr notify_close_session: %d(r=%d) force=%d", i, r, (need_shift?1:0));
 
 //	if (need_shift && (i % 4) == 0)
 //		xsys_sleep_ms(5);
@@ -1060,7 +1086,7 @@ bool xsys_udp_server::session_isopen(int i)
 
 void xsys_udp_server::session_close(int i)
 {
-	static const char szFunctionName[] = "xsys_udp_server::session_close";
+	static const char szFunctionName[] = "x_udp_svr::session_close";
 
 	if (!XUDPSESSION_INRANGE(i)){
 		WriteToEventLog("%s: i = %d is out range[0~%d]", szFunctionName, i, m_session_count);
@@ -1073,11 +1099,9 @@ void xsys_udp_server::session_close(int i)
 	if (!PUDPSESSION_ISOPEN(psession)){
 		WriteToEventLog("%s: i = %d is not opened", szFunctionName, i);
 	}else{
-		psession->recv_state = XTS_SESSION_END;
 		on_closed(i);
+		psession->recv_state = XTS_SESSION_END;
 	}
-
-	session_close(psession);
 
 	WriteToEventLog("%s: i = %d is closed", szFunctionName, i);
 }
@@ -1175,7 +1199,7 @@ void xsys_udp_server::set_idle(int idle_secs)
 
 int xsys_udp_server::send(int isession, const char * s, int len)
 {
-	static const char szFunctionName[] = "xsys_udp_server::send";
+	static const char szFunctionName[] = "x_udp_svr::send";
 
 	if (!XUDPSESSION_INRANGE(isession) || !PUDPSESSION_ISOPEN(m_psessions+isession))
 	{

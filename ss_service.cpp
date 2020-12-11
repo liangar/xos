@@ -240,7 +240,7 @@ void WriteToEventLog(int wEventType, int dwEventID, char const * pFormat, ...)
     va_end(pArg);
 }
 
-void WriteToEventLog(char const * pFormat, ...)
+void WriteToEventLog(_Printf_format_string_ char const * pFormat, ...)
 {
     va_list pArg;
 
@@ -249,7 +249,7 @@ void WriteToEventLog(char const * pFormat, ...)
     va_end(pArg);
 }
 
-void WriteToFileLog(const char * logfile, char const * pFormat, ...)
+void WriteToFileLog(const char * logfile, _Printf_format_string_ char const * pFormat, ...)
 {
 	va_list pArg;
     char s[512], logpath[MAX_PATH], nowstring[32];

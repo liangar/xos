@@ -10,7 +10,7 @@
 
 #define XSYS_IP_FATAL	-101
 
-typedef enum {
+enum XTS_STATES {
 	XTS_RECV_READY = 0,
 	XTS_RECVING,
 	XTS_RECVED,
@@ -23,7 +23,7 @@ typedef enum {
 	XTS_SEND_EXCEPT,
 	XTS_SESSION_END = 10000,
 	XTS_SESSION_OPENING = 10001
-} XTS_STATES;
+};
 
 struct xtcp_session{
 	xsys_socket	sock;	/// Í¨Ñ¶¾ä±ú

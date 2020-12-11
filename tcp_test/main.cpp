@@ -4,7 +4,7 @@
 
 #include "test_tcp.h"
 
-#include <thread> t1;
+#include <thread>
 
 #ifdef WIN32
 #include <crtdbg.h>
@@ -40,10 +40,14 @@ int main(int argc, char **argv)
 	g_port = atoi(argv[1]);
 
 	xsys_init(true);
-
-	std::thread h1(recv_show, nullptr);
-
 	openservicelog("test_tcp.log", true, 60, true, "./");
+
+	g_queue.init(32, 1000);
+	g_queue.set_timeout_ms(199999999);
+
+//	std::thread t1(recv_show, nullptr);
+	xsys_thread t1;
+	t1.init(recv_show, 0);
 
 	/*
 	{
@@ -59,7 +63,7 @@ int main(int argc, char **argv)
 	//*/
 
 	test_tcp * ptcp = new test_tcp("TCP-²âÊÔ",10);	///²âÊÔtcp·þÎñ
-	g_queue.init(32, 1000);
+
 	int i=1;
 	ptcp->m_idle = 30;
 	ptcp->m_works= 2;
@@ -80,7 +84,7 @@ int main(int argc, char **argv)
 		}else if (strncmp(b, "put", 3)==0)
 		{
 			if (b[3] == ':'){
-				const char * p = getaword(b, b+4);
+				const char * p = getaword(b, b+4, ',');
 				g_queue.put(atoi(b), p);
 			}else{
 				cout << "put:" << i << endl;
@@ -132,8 +136,9 @@ int main(int argc, char **argv)
 			cout<<"7 '|'  ÍË³ö" << endl;
 		}
 	}
-	g_queue.put(-1, "");
-	t1.join();
+	g_queue.put(-1, "exit");
+//	t1.join();
+	t1.down();
 
 	g_queue.down();
 	delete ptcp;
@@ -160,18 +165,12 @@ static unsigned int recv_show(void * pvoid)
 {
 	char aline[512];
 
-//	char old_ip[MAX_IP_LEN];
-//	char ip[MAX_IP_LEN];
-//	old_ip[0] = ip[0] = 0;
-
-	is_run = true;
-
 	printf("recver: start.\n");
 
-	int l = 1, i, n, r;
-	while ((len = m_recv_queue.get_free((long *)(&i), aline)) > 0){
-		printf("%d <-:\n", i+1);
-		write_buf_log("RECV", (unsigned char *)aline, l);
+	int l = 1, i;
+	while ((l = g_queue.get_free((long *)(&i), aline)) > 0 && i >= 0){
+		printf("%d <-: %d\n", i, l);
+		// write_buf_log("RECV", (unsigned char *)aline, l);
 	}
 
 	return 0;

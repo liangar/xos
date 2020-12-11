@@ -171,7 +171,7 @@ void main(int argc, char **argv)
 	if (open_count > 0){
 	// xsys_thread h1;
 	// h1.init(recv_show, 0);
-	std::thread h1(recv_show, nullptr);
+	std::thread h1([](){recv_show(nullptr);});
 
 	xsys_sleep_ms(10);
 

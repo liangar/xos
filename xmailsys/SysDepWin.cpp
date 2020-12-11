@@ -1867,8 +1867,13 @@ struct tm *SysGMTime(time_t *pTimer, struct tm *pTStruct)
 
 char *SysAscTime(struct tm *pTStruct, char *pszBuffer, int iBufferSize)
 {
-	strncpy(pszBuffer, asctime(pTStruct), iBufferSize);
-	pszBuffer[iBufferSize - 1] = '\0';
+	if (iBufferSize >= 1)
+		pszBuffer[iBufferSize - 1] = '\0';
+
+	char* p = asctime(pTStruct);
+	if (p == nullptr)
+		return nullptr;
+	strncpy(pszBuffer, p, iBufferSize);
 
 	return pszBuffer;
 }

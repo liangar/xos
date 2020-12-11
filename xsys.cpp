@@ -1,6 +1,7 @@
 #include <xsys.h>
 #include <l_str.h>
 #include <ss_service.h>
+#include <condition_variable>
 
 bool bServerDebug;
 static bool bsys_inited = false;
