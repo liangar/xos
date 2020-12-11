@@ -42,6 +42,10 @@ int xseq_buf::init(int bufsize, int uses)
 	init_vars();
 
 	int r = m_uses.open(uses);
+	if (r < 0){
+		::free(m_pbuf);  m_pbuf = nullptr;
+		return r;
+	}
 	m_timeout_ms = 2000;
 
 	m_psem = new xsys_semaphore;

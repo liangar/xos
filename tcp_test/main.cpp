@@ -32,12 +32,17 @@ int main(int argc, char **argv)
 #endif // _DEBUG
 #endif // WIN32
 
-	if (argc != 2){
-		printf("usage: tcp_test <listen port>\n");
+	if (argc < 2){
+		printf("usage: tcp_test <listen port> [<queue len>]\n");
 		return -1;
 	}
 
 	g_port = atoi(argv[1]);
+	int queue_len = 100;
+	if (argc == 3)
+		queue_len = atoi(argv[2]);
+	if (queue_len < 5 || queue_len > 5000)
+		queue_len = 5;
 
 	xsys_init(true);
 	openservicelog("test_tcp.log", true, 60, true, "./");
@@ -170,6 +175,7 @@ static unsigned int recv_show(void * pvoid)
 	int l = 1, i;
 	while ((l = g_queue.get_free((long *)(&i), aline)) > 0 && i >= 0){
 		printf("%d <-: %d\n", i, l);
+		xsys_sleep(3);
 		// write_buf_log("RECV", (unsigned char *)aline, l);
 	}
 

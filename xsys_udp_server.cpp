@@ -1093,17 +1093,15 @@ void xsys_udp_server::session_close(int i)
 		return;
 	}
 
-	WriteToEventLog("%s: i = %d will be closed", szFunctionName, i);
-
 	xudp_session * psession = m_psessions + i;
 	if (!PUDPSESSION_ISOPEN(psession)){
 		WriteToEventLog("%s: i = %d is not opened", szFunctionName, i);
 	}else{
+		WriteToEventLog("%s: i = %d will be closed", szFunctionName, i);
 		on_closed(i);
 		psession->recv_state = XTS_SESSION_END;
+		WriteToEventLog("%s: i = %d is closed", szFunctionName, i);
 	}
-
-	WriteToEventLog("%s: i = %d is closed", szFunctionName, i);
 }
 
 void xsys_udp_server::session_recv_reset(int i)
