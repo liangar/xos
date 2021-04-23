@@ -1,28 +1,17 @@
-#ifndef XSYS_TCP_TEST_H
-#define XSYS_TCP_TEST_H
+﻿#pragma once
 
-#include <xsys_tcp_server.h>
-class test_tcp : public xsys_tcp_server
+#include <xasc_server.h>
+
+class test_tcp : public xasc_server
 {
 public:
-	/// ����
 	test_tcp();
-	~test_tcp(){};
-	test_tcp(const char * name, int nmaxexception = 5);
 
-	void check_recv_state(int i);
-	void check_send_state(int i);
+protected:
+	int  calc_pkg_len(const unsigned char * pbuf, int len);
 
-	bool on_connected(int i);
-	bool on_recved   (int i);
-	bool on_closed   (int i);
+	int  do_msg(int i, char * msg, int msg_len);
+
+	int  do_idle(int i);	/// 空闲处理
+	bool on_sent(int i, int len);	/// 发送完成
 };
-
-class test_server : public xwork_server
-{
-public:
-	test_server();
-	void run(void);
-};
-
-#endif // XSYS_TCP_TEST_H

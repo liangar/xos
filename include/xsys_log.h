@@ -13,6 +13,7 @@ public:
 	bool reopen(void);
 	int  close(void);
 	
+	int write(int c);
 	int write(const char * s);
 	int write_aline(const char * s);
 

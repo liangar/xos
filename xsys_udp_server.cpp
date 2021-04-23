@@ -58,6 +58,7 @@ xsys_udp_server::xsys_udp_server()
 	m_serverURL[0] = 0;
 	m_pused_index = NULL;
 	m_used_count = 0;
+	m_send_len = 0;
 }
 
 xsys_udp_server::xsys_udp_server(const char * name, int nmaxexception)
@@ -68,12 +69,14 @@ xsys_udp_server::xsys_udp_server(const char * name, int nmaxexception)
 	, m_session_count(0)
 	, m_precv_buf(0)
 	, m_recv_len(0)
+	, m_session_idle(10)
 	, m_plisten_sock(nullptr)
 	, m_has_new_cmd(false)
 {
 	m_pused_index = NULL;
 	m_used_count = 0;
 	m_serverURL[0] = 0;
+	m_send_len = 0;
 }
 
 static int calc_addr_crc(SYS_INET_ADDR * addr)
@@ -479,7 +482,7 @@ void xsys_udp_server::run(void)
 			}
 		}
 
-		write_buf_log(szFunctionName, (unsigned char *)m_precv_buf, len);
+		write_buf_hex_log(szFunctionName, (unsigned char *)m_precv_buf, len);
 
 		/// 判断直接发送
 		if (m_psessions[i].recv_len == 0 && calc_msg_len(i, m_precv_buf, len) == len){
@@ -493,7 +496,7 @@ void xsys_udp_server::run(void)
 				WriteToEventLog("%s: <%d> - send(%d/%d) to recv_queue", szFunctionName, i, r, len);
 			}
 			m_psessions[i].recv_state = XTS_RECV_READY;
-			xsys_sleep_ms(10);
+			std::this_thread::yield();
 			continue;
 		}
 
@@ -594,6 +597,7 @@ void xsys_udp_server::msg_server(void)
 							// set session
 							isession = atoi(ptemp_buf+5);
 							r = do_idle(isession);
+							m_psessions[isession].last_trans_time = m_heartbeat;
 						}else if (strcmp(ptemp_buf, "cmds") == 0 || len < 1){
 							WriteToEventLog("%s: load cmds", szFunctionName);
 							r = do_cmd();
@@ -1038,10 +1042,6 @@ void xsys_udp_server::session_open(int i)
 	psession->createTime =
 		psession->last_recv_time  =
 		psession->last_trans_time = m_heartbeat;
-
-	// 如果不加，会是0，此数或许会被应用程序用到，故此设置为-1
-	psession->peerid = -1;
-	psession->running_cmdid = -1;
 }
 
 /*
@@ -1188,7 +1188,7 @@ void xsys_udp_server::set_session_idle(int isession, int idle_secs)
 void xsys_udp_server::set_idle(int idle_secs)
 {
 	if (idle_secs > m_session_ttl)
-		m_idle = m_session_ttl - 3;
+		m_idle = m_session_ttl + 3;
 	else if (idle_secs < 3)
 		m_idle = 3;
 	else

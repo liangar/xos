@@ -1,70 +1,40 @@
-#include <xsys_tcp_server.h>
-#include "test_tcp.h"
+﻿#include "test_tcp.h"
 
 test_tcp::test_tcp()
-	: xsys_tcp_server()
-{
-}
-test_tcp::test_tcp(const char * name, int nmaxexception)
-: xsys_tcp_server(name, nmaxexception)
+	: xasc_server("TEST_XASC")
 {
 }
 
-void test_tcp::check_recv_state(int i) 
+int test_tcp::calc_pkg_len(const unsigned char * pbuf, int len)
 {
-	xtcp_session * psession = m_psessions + i;
+	const char * p = strchr((const char *)pbuf, '\n');
+	if (p >= (const char *)pbuf && p < (const char * )pbuf+len)
+		return len;
 
-	WriteToEventLog("check_recv_state(recv len = %d)", psession->recv_len);
+	if (len < most_len_)
+		return most_len_;
 
-	//*
-	if (psession->recv_len < 4){
-		return;
-	}
-	//*/
-	const char * p = strchr(psession->precv_buf, ',');
-	if (p){
-		int len = atoi(psession->precv_buf);
-		if (len <= psession->recv_len - int(p - psession->precv_buf) - 1){
-			psession->recv_state = XTS_RECVED;
-		}
-	}
+	return max_len_;
 }
 
-void test_tcp::check_send_state(int i) 
+int test_tcp::do_msg(int i, char * msg, int msg_len)
 {
-	xtcp_session * psession = m_psessions + i;
-
-	WriteToEventLog("check_send_state(id = %d, send = %d, sent=%d)", i, psession->send_len, psession->sent_len);
+	log_print("[%d]<-: {%s}", i, msg);
+	return 0;
 }
-bool test_tcp::on_connected(int i)
-{
-	xtcp_session * psession = m_psessions + i;
 
-	WriteToEventLog("on_connected: id = %d, peer_ip = %s; self_ip = %s", i, psession->peerip, psession->servip);
+/// 空闲处理
+int test_tcp::do_idle(int i)
+{
+	log_print("[%d]: idle", i);
+	
+	return 0;
+}
+
+/// 发送完成
+bool test_tcp::on_sent(int i, int len)
+{
+	log_print("[%d]: sent %d bytes", i, len);
 
 	return true;
-}
-
-bool test_tcp::on_recved(int i)
-{
-	xtcp_session * psession = m_psessions + i;
-
-	write_buf_log("RECVED", (unsigned char *)psession->precv_buf, psession->recv_len);
-	return true;
-}
-
-bool test_tcp::on_closed(int i)
-{
-	return true;
-}
-
-test_server::test_server()
-	: xwork_server("test_server", 5)
-{
-	m_works = 1;
-}
-
-void test_server::run(void)
-{
-	printf("...\n");
 }

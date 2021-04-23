@@ -51,6 +51,8 @@ char * getnextmonth(char * s);			/// 在原位置上取下一月:YYYYMMDD
 long getmaxdaywithmonth(int year, int month);	//取得一个月最后一天，返回DD，month取值1-12
 long getmaxdaywithmonth(char * s);	//取得一个月最后一天，返回DD
 
+// 取下一个 HHMI 时间，如果只有2位整数，则 MI 为 0
+long get_next_hhmi_time(const char *hhmi);
 long getnextimebyminute(char * hhmm);	///计算下一个时刻距离现在的分钟数
 
 long simple2time(const char * s);		/*!< 将简单格式串转为时间 */
@@ -109,6 +111,7 @@ void EL_put_line(const char * s);				/*!< 写字符串到日值文件,换行 */
 void EL_WriteHexString(const char * s, int len);/*!< 写16进制字符串到日值文件 */
 void EL_WriteNow();	/*!< 写当前时间到日值文件 */
 void write_buf_log(const char * title, unsigned char * buf, int len);
+void write_buf_hex_log(const char * title, unsigned char * buf, int len);
 
 char * get_error_message(unsigned int dwError, char * msg, int maxlen);	/*!< 取得系统出错说明 */
 

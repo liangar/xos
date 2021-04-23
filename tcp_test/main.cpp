@@ -1,10 +1,13 @@
-#include <xsys.h>
 #include <iostream>
-#include <l_str.h>
+#include <algorithm>
+
+#include <xslm_deque.h>
+#include <xstr.h>
 
 #include "test_tcp.h"
 
-#include <thread>
+//
+#include <xqueue_msg.h>
 
 #ifdef WIN32
 #include <crtdbg.h>
@@ -14,12 +17,51 @@
 #endif // _DEBUG
 #endif // WIN32
 
-char b[128*1024];
+extern int test_slm_q(void);
+
+char b[16*1024];
+
+template<long FROM, long TO>
+class Range {
+public:
+	// member typedefs provided through inheriting from std::iterator
+	class iterator : public std::iterator<
+		std::input_iterator_tag,   // iterator_category
+		long,                      // value_type
+		long,                      // difference_type
+		const long*,               // pointer
+		long                       // reference
+	> {
+		long num = FROM;
+	public:
+		explicit iterator(long _num = 0) : num(_num) {}
+		iterator& operator++() { num = TO >= FROM ? num + 1 : num - 1; return *this; }
+		iterator operator++(int) { iterator retval = *this; ++(*this); return retval; }
+		bool operator==(iterator other) const { return num == other.num; }
+		bool operator!=(iterator other) const { return !(*this == other); }
+		reference operator*() const { return num; }
+	};
+	iterator begin() { return iterator(FROM); }
+	iterator end() { return iterator(TO >= FROM ? TO + 1 : TO - 1); }
+};
+
+void test_iterator(void)
+{
+	auto range = Range<15, 25>();
+	auto itr = std::find(range.begin(), range.end(), 18);
+	std::cout << *itr << '\n'; // 18
+
+	// Range::iterator also satisfies range-based for requirements
+	for (long l : Range<3, 5>()) {
+		std::cout << l << ' '; // 3 4 5
+	}
+	std::cout << '\n';
+}
 
 using namespace std;
 
 static unsigned int recv_show(void * pvoid);
-xseq_buf	g_queue;			/// 测试队列
+xqueue_msg g_queue;
 
 int g_port;
 
@@ -29,6 +71,7 @@ int main(int argc, char **argv)
 #ifdef _DEBUG
 	_CrtMemState s1,s2,s3;
 	_CrtMemCheckpoint( &s1 );
+//	_CrtSetBreakAlloc(251);
 #endif // _DEBUG
 #endif // WIN32
 
@@ -44,42 +87,29 @@ int main(int argc, char **argv)
 	if (queue_len < 5 || queue_len > 5000)
 		queue_len = 5;
 
-	xsys_init(true);
-	openservicelog("test_tcp.log", true, 60, true, "./");
+	net_evn_init();
+	log_open("test_tcp.log");
+
+	test_iterator();
 
 	g_queue.init(32, 1000);
-	g_queue.set_timeout_ms(199999999);
 
-//	std::thread t1(recv_show, nullptr);
-	xsys_thread t1;
-	t1.init(recv_show, 0);
+	std::thread t1([] {recv_show(nullptr); });
 
-	/*
-	{
-	test_server * psvr = new test_server;
-	psvr->open();
-	psvr->m_idle = 1;
-	psvr->start();
-	xsys_sleep(10);
-	psvr->stop();
-	psvr->close();
-	delete psvr;
-	}
-	//*/
-
-	test_tcp * ptcp = new test_tcp("TCP-测试",10);	///测试tcp服务
+	test_tcp * ptcp = new test_tcp();	///测试tcp服务
 
 	int i=1;
-	ptcp->m_idle = 30;
-	ptcp->m_works= 2;
 	cout << "please enter a command or '|' to exit: ";
 	while(1)
 	{
 		cin.getline(b, 512);
-		if(strcmp(b,"start")==0)
+		if (strcmp(b, "q") == 0) {
+			test_slm_q();
+		}else if(strcmp(b,"start")==0)
 		{
 			cout<< "command:start" <<endl;
-			ptcp->open(g_port, 200, 10, 8*1024);
+			// port, sessions, most recv len, max len, send len
+			ptcp->open(g_port, 20, 300, 128, 256, 256);
 			ptcp->start();
 		}else if (strcmp(b,"stop")==0)
 		{
@@ -90,44 +120,33 @@ int main(int argc, char **argv)
 		{
 			if (b[3] == ':'){
 				const char * p = getaword(b, b+4, ',');
-				g_queue.put(atoi(b), p);
+				g_queue.put(atoi(b), p, 2000);
 			}else{
 				cout << "put:" << i << endl;
 				char temp[10];
 				sprintf(temp, "TestData%d", i);
-				g_queue.put(i, temp);
+				g_queue.put(i, temp, 2000);
 			}
 			i++;
 		}else if (strcmp(b,"get")==0)
 		{
-			xseq_buf_use use;
-			int r = g_queue.get(&use);
-			if(r>=0){
-				cout << "get:(id=" << use.id <<") " << use.p  <<endl;
+			long id;
+			int r = g_queue.get(&id, b, 2000);
+			if (r > 0){
+				cout << "get:(id=" << id <<") " << b  <<endl;
 				i--;
 			}else{
-				cout << "not Data" <<endl;
+				cout << "no data" << endl;
 			}
-		}else if (strncmp(b,"send:", 5) == 0)
-		{
+		}else if (strncmp(b,"send:", 5) == 0){
+			// send:1:this is a test string for 1 session
 			int i = atoi(b+5);
-
-			cout << "请输入发送数据,exit退出发送命令" << endl;
-			for (;;)
-			{
-				char s[512], d[512];
-				cin.getline(s,512);
-				if(strcmp(s,"exit")==0)
-				{
-					cout << "发送命令已退出" << endl;
-					break;
-				}
-				int l = c2string(d, s);
-				ptcp->send(i,d);
-				printf("send (%d) bytes\n", l);
-			}
+			char * s = strchr(b + 5, ':');
+			int l = c2string(b, s+1);
+			ptcp->send(i, b);
+			printf("send (%d) bytes\n", l);
 		}else if (strncmp(b, "close:", 6) == 0){
-			ptcp->session_close(atoi(b+6));
+			ptcp->notify_close_session(atoi(b+6));
 		}else if (strcmp(b,"|")==0){
 			break;
 		}else{
@@ -142,15 +161,14 @@ int main(int argc, char **argv)
 		}
 	}
 	g_queue.put(-1, "exit");
-//	t1.join();
-	t1.down();
+	t1.join();
 
-	g_queue.down();
+	g_queue.done();
 	delete ptcp;
 
-	closeservicelog();
+	log_close();
 
-	xsys_down();
+	net_env_done();
 
 #ifdef WIN32
 #ifdef _DEBUG
@@ -170,14 +188,18 @@ static unsigned int recv_show(void * pvoid)
 {
 	char aline[512];
 
-	printf("recver: start.\n");
+	printf("recver: in.\n");
 
 	int l = 1, i;
-	while ((l = g_queue.get_free((long *)(&i), aline)) > 0 && i >= 0){
-		printf("%d <-: %d\n", i, l);
-		xsys_sleep(3);
-		// write_buf_log("RECV", (unsigned char *)aline, l);
+	for (;;) {
+		l = g_queue.get((long*)(&i), aline);
+		if (l > 0) {
+			if (i < 0)  break;
+			printf("%d <-: %d\n", i, l);
+			xsleep_sec(3);
+		}
 	}
+	printf("recver: out.\n");
 
 	return 0;
 }

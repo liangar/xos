@@ -1,5 +1,6 @@
 #pragma once
 
+#include <thread>
 #include <xsys_tcp_server.h>
 
 #define PUDPSESSION_ISOPEN(p)	((p)->recv_state != XTS_SESSION_END)
@@ -13,7 +14,6 @@ struct xudp_session{
 	volatile long	last_recv_time;	/// 最近接收时间
 	volatile long	last_trans_time;/// 最近通讯时间
 	volatile int 	idle_secs;		/// 空闲秒数，到达空闲时间，执行on_idle
-	volatile int	peerid;			/// 连接对方的 id 标识, 给应用使用
 
 	/// recv
 	volatile XTS_STATES	recv_state;	/// 接收状态
@@ -25,7 +25,11 @@ struct xudp_session{
 	
 	SYS_SOCKET target_sock; /// 转发的目标地址
 
-	volatile int running_cmdid;
+	union{
+		volatile int	peerid;		/// 连接对方的 id 标识, 给应用使用
+		volatile void * pdev;
+	};
+	volatile void * pcmd;
 };
 
 class xsys_udp_server : public xwork_server
@@ -93,10 +97,10 @@ protected:
 	virtual int  do_msg(int i, char * msg, int msg_len) = 0;	/// 处理消息
 	virtual int  do_cmd(const char * cmd = 0) = 0;	/// 主动命令执行
 
+	virtual int  on_open	(int i)  {  return 0;  }
 	virtual bool on_sent	(int i, int len) = 0;	/// 发送完成
 	virtual bool on_closed  (int i) = 0;
 	virtual int  do_idle	(int i) = 0;
-
 
 protected:
 //	void timeout_check(void);

@@ -360,7 +360,7 @@ int strmove(char * d, char * s)
 }
 
 // ++
-int strreplace(char * d, char * s0, char * s1)
+int strreplace(char * d, const char * s0, const char * s1)
 {
     if (d == NULL || s0 == NULL || s1 == NULL)  return -1;
     if (*s0 == '\0')  return 0;
@@ -375,7 +375,7 @@ int strreplace(char * d, char * s0, char * s1)
     return 0;
 }
 
-int strreplace(char * s0, int l0, char * s1, int l1)
+int strreplace(char * s0, int l0, const char * s1, int l1)
 {
 	if (l1 <= 0)  l1 = strlen(s1);
 	strmove(s0+l1, s0+l0);

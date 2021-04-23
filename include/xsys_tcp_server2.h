@@ -162,7 +162,6 @@ protected:
 
 protected:
 	int			m_listen_port;	/// 端口
-	char		m_serverURL[64];/// 服务端的URL地址
 	xsys_socket m_listen_sock;	
 	int 		m_session_ttl;	/// 超时时间(秒)
 	int 		m_session_idle; /// 会话空闲时间

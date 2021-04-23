@@ -1,6 +1,8 @@
 #include <xsys.h>
 
-#include <l_str.h>
+#include <xtype.h>
+#include <xstr.h>
+
 #include <lfile.h>
 
 #include <xsys_log.h>
@@ -67,9 +69,9 @@ void EL_put_line(const char * s)
 bool openservicelog(const char * pfilename, bool b_in_debug, int idle, bool saveold, const char * bakpath)
 {
 	char logpath[MAX_PATH];
-	
+
 	bdebug = b_in_debug;
-	
+
 	getfullname(logpath, pfilename, sizeof(logpath));
 
 	::chdir(run_path);
@@ -83,12 +85,12 @@ bool openservicelog(const char * pfilename, bool b_in_debug, int idle, bool save
 		time_t t = get_modify_time(timestring, logpath);
 		if (t > 0) {
 			char topath[MAX_PATH];
-			
+
 			if (bakpath == 0 || *bakpath == 0) {	// 无指定bak目录
 				strcpy(topath, logpath);
 			}else{
 				char t[MAX_PATH], m[8], logname[512];
-				
+
 				memset(logname, 0x0, sizeof(logname));
 				const char * p = strrchr(pfilename, '/');
 				if (p == 0)
@@ -99,7 +101,7 @@ bool openservicelog(const char * pfilename, bool b_in_debug, int idle, bool save
 					p++;
 					strcpy(logname, p);
 				}
-				
+
 				memcpy(m, timestring, 6);  m[6] = 0;
 #ifndef WIN32
 				sprintf(t, "%s/%s/%s", bakpath, m, logname);
@@ -116,9 +118,9 @@ bool openservicelog(const char * pfilename, bool b_in_debug, int idle, bool save
 			rename(logpath, topath);
 		}
 	}
-	
+
 	hlogfile = fopen(logpath, "w+");
-	
+
 	t_idle = idle;
 	return (hlogfile != NULL);
 	//*/
@@ -159,7 +161,7 @@ void To_Lower(char *s)
 {
 	if (s == 0)
 		return;
-	
+
 	int l = int(strlen(s));
 	for(int i = 0; i < l; i++){
 		s[i] = tolower(s[i]);
@@ -170,7 +172,7 @@ char * getpathfile(const char * filename, char * fullFileName, char *outPath, ch
 {
 	char szFileName[256];
 	int pathlen = 0, l = 0;
-	
+
 	char * p1 = strrchr((char *)filename, '\\');
 	char * p2 = strrchr((char *)filename, '/');
 	if (p1 == 0 && p2 == 0) {
@@ -183,7 +185,7 @@ char * getpathfile(const char * filename, char * fullFileName, char *outPath, ch
 		p1 = strrchr(szFileName, '\\');
 		p2 = strrchr(szFileName, '/');
 	}
-	
+
 	if (p1 > p2){
 		pathlen = int(p1 - szFileName);
 		l = (int)strlen(szFileName)-pathlen-1;
@@ -201,10 +203,10 @@ char * getpathfile(const char * filename, char * fullFileName, char *outPath, ch
 		memcpy(outFileName, szFileName, l);
 		outFileName[l] = '\0';
 	}
-	
-	memcpy(outPath, szFileName, pathlen);  
+
+	memcpy(outPath, szFileName, pathlen);
 	outPath[pathlen] = 0;
-	
+
 	l = (int)strlen(szFileName);
 	memcpy(fullFileName, szFileName, l);
 	fullFileName[l] = 0;
@@ -253,26 +255,26 @@ void WriteToFileLog(const char * logfile, _Printf_format_string_ char const * pF
 {
 	va_list pArg;
     char s[512], logpath[MAX_PATH], nowstring[32];
-	
+
 	getfullname(logpath, logfile, sizeof(logpath));
-	
+
 	//WriteToEventLog("begin open FileLog [%s].", logpath);
 	FILE * hf = fopen(logpath, "ab");
 	if (hf == NULL){
 		return;
 	}
 	getnowtime(nowstring);
-	fputs(nowstring, hf);  
+	fputs(nowstring, hf);
 	fputs("\t", hf);
 
 	va_start(pArg, pFormat);
-	SysVSNPrintf(s, sizeof(s)-1, pFormat, pArg);  s[sizeof(s)-1] = '\0';
+	vsnprintf_s(s, sizeof(s)-1, pFormat, pArg);  s[sizeof(s)-1] = '\0';
     va_end(pArg);
 
 	fputs(s, hf);
 	fputs("\n", hf);
 	fflush(hf);
-	fclose(hf);  
+	fclose(hf);
 	hf = NULL;
 }
 
@@ -319,19 +321,19 @@ long string2time(const char * s, bool bendflag)
 
 	p = getaword(tmp, s, '-');
 	ltime.tm_year = atoi(tmp) - 1900;
-	
+
 	p = getaword(tmp, p, '-');
 	ltime.tm_mon = atoi(tmp)-1;
-	
+
 	p = getaword(tmp, p, ' ');
 	ltime.tm_mday = atoi(tmp);
-	
+
 	p = getaword(tmp, p, ':');
 	ltime.tm_hour = atoi(tmp);
-	
+
 	p = getaword(tmp, p, ':');
 	ltime.tm_min = atoi(tmp);
-	
+
 	p = getaword(tmp, p, ' ');
 	ltime.tm_sec = atoi(tmp);
 
@@ -354,37 +356,37 @@ char * string2simple(char *d, char *s, bool bendflag)
 		ltime.tm_min = 0;
 		ltime.tm_sec = 0;
 	}
-	
+
 	p = getaword(tmp, s, '-');
 	if (p == 0 || tmp[0] == '\0')
 		return d;
 	ltime.tm_year = atoi(tmp);
-	
+
 	p = getaword(tmp, p, '-');
 	if (p == 0 || tmp[0] == '\0')
 		return d;
 	ltime.tm_mon = atoi(tmp);
-	
+
 	p = getaword(tmp, p, ' ');
 	if (p == 0	|| tmp[0] == '\0'){
 		return d;
 	}
 	ltime.tm_mday = atoi(tmp);
-	
+
 	p = getaword(tmp, p, ':');
 	if (p == 0 || tmp[0] == '\0'){
 		sprintf(d, "%04d%02d%02d%02d%02d%02d", ltime.tm_year, ltime.tm_mon, ltime.tm_mday, ltime.tm_hour, ltime.tm_min, ltime.tm_sec);
 		return d;
 	}
 	ltime.tm_hour = atoi(tmp);
-	
+
 	p = getaword(tmp, p, ':');
 	if (p == 0 || tmp[0] == '\0'){
 		sprintf(d, "%04d%02d%02d%02d%02d%02d", ltime.tm_year, ltime.tm_mon, ltime.tm_mday, ltime.tm_hour, ltime.tm_min, ltime.tm_sec);
 		return d;
 	}
 	ltime.tm_min = atoi(tmp);
-	
+
 	p = getaword(tmp, p, ' ');
 	ltime.tm_sec = atoi(tmp);
 
@@ -492,35 +494,35 @@ char * getprevdate(char * s) {
 	return s;
 }
 
-long getnextimebyminute(char * hhmm) {
+long getnextimebyminute(char * hhmi) {
+	return get_next_hhmi_time(hhmi) / 60;
+}
+
+long get_next_hhmi_time(const char *hhmi)
+{
+	time_t now = long(time(nullptr));
+
+	if (hhmi == nullptr || *hhmi == 0)
+		return now;
+
 	struct tm tt;
 	char t[4];
-	time_t now = time(0);
-
 	memcpy(&tt, localtime(&now), sizeof(struct tm));
-	tt.tm_hour = 0;
-	tt.tm_min = 0;
 	tt.tm_sec = 0;
 
-	t[2] = 0;
-	if (*hhmm) {
-		t[0] = hhmm[0];
-		t[1] = hhmm[1];
-		tt.tm_hour = atoi(t);
-		if (hhmm[2]) {
-			t[0] = hhmm[2];
-			t[1] = hhmm[3];
-			tt.tm_min = atoi(t);
-//			if (hhmm[4]) {
-//				tt.tm_sec = atoi(hhmm + 4);
-//			}
-		}
+	t[0] = hhmi[0];  t[1] = hhmi[1];  t[2] = 0;
+	tt.tm_hour = atoi(t);
+	if (hhmi[2]) {
+		t[0] = hhmi[2];  t[1] = hhmi[3];
+		tt.tm_min = atoi(t);
+	}else
+		tt.tm_min = 0;
+
+	long r = long(mktime(&tt));
+	if (now >= r) {
+		r += 24 * 60 * 60;
 	}
 
-	long r = long(mktime(&tt) - now) / 60;
-	if (0 >= r) {
-		r += 24 * 60;
-	}
 	return r;
 }
 
@@ -731,7 +733,7 @@ char * simple2string(char * d, const char * s)
 
 		d[12] = s[ 9];  d[11] = s[ 8];  d[10] = ' ';
 		d[19] = 0;
-	}	
+	}
 	d[9] = s[7];  d[8] = s[6];  d[7] = '-';
 	d[6] = s[5];  d[5] = s[4];  d[4] = '-';
 
@@ -745,9 +747,9 @@ long simple2time(const char * s)
 {
 	struct tm t;
 	memset(&t, 0, sizeof(t));
-	
+
 	char v[16];
-	
+
 	int l = int(strlen(s));
 	if (l == 8) {
 		if (!dt_ValidDate(s)) {
@@ -767,7 +769,7 @@ long simple2time(const char * s)
 		memcpy(v, s+12,2);  v[2] = 0;  t.tm_sec  = atoi(v);
 	}else
 		return 0;
-	
+
 	return long(mktime(&t));
 }
 
@@ -778,18 +780,18 @@ bool dt_ValidDate(const char * s)
 	if (l != 8) {
 		return false;
 	}
-	
+
 	struct tm t;
 	memset(&t, 0, sizeof(t));
-	
+
 	char v[16];
 	memcpy(v, s  , 4);  v[4] = 0;  t.tm_year = atoi(v) - 1900;
 	memcpy(v, s+4, 2);  v[2] = 0;  t.tm_mon  = atoi(v) - 1;
 	memcpy(v, s+6, 2);  v[2] = 0;  t.tm_mday = atoi(v);
-	
+
 	if (t.tm_year < 0 || t.tm_year > 1000 || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday > 31)
 		return false;
-	
+
 	return (memcmp(s, time2simpledate(v, long(mktime(&t))), 8) == 0);
 }
 
@@ -803,12 +805,12 @@ bool dt_ValidTime(const char * s)
 	memset(&t, 0, sizeof(t));
 	t.tm_mday = 1;
 	t.tm_year = 106;
-	
+
 	char v[16];
 	memcpy(v, s  , 2);  v[2] = 0;  t.tm_hour = atoi(v);
 	memcpy(v, s+2, 2);  v[2] = 0;  t.tm_min  = atoi(v);
 	memcpy(v, s+4, 2);  v[2] = 0;  t.tm_sec  = atoi(v);
-	
+
 	long n = long(mktime(&t));
 	return (strcmp(s, time2simple(v, n) + 8) == 0);
 }
@@ -822,7 +824,7 @@ bool dt_ValidDateTime(const char * s)
 	struct tm t;
 	memset(&t, 0, sizeof(t));
 	t.tm_mday = 1;
-	
+
 	char v[16];
 	memcpy(v, s  , 4);  v[4] = 0;  t.tm_year = atoi(v) - 1900;
 	memcpy(v, s+4, 2);  v[2] = 0;  t.tm_mon  = atoi(v) - 1;
@@ -830,10 +832,10 @@ bool dt_ValidDateTime(const char * s)
 	memcpy(v, s+8, 2);  v[2] = 0;  t.tm_hour = atoi(v);
 	memcpy(v, s+10,2);  v[2] = 0;  t.tm_min  = atoi(v);
 	memcpy(v, s+12,2);  v[2] = 0;  t.tm_sec  = atoi(v);
-	
+
 	if (t.tm_year < 0 || t.tm_year > 1000 || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday > 31)
 		return false;
-	
+
 	return (strcmp(s, time2simple(v, long(mktime(&t)))) == 0);
 }
 
@@ -901,6 +903,31 @@ void write_buf_log(const char * title, unsigned char * buf, int len)
 		}
 		EL_puts(s);
 		EL_puts(sshow);
+	}
+}
+
+void write_buf_hex_log(const char * title, unsigned char * buf, int len)
+{
+	int i, j, n;
+	unsigned char * p = buf;
+	char s[64];
+
+	EL_puts(title);
+	EL_puts(":\n     0001 0203 0405 0607 0809 0A0B 0C0D 0E0F\n");
+	for (i = n = 0; n < len; i++){
+		int l = sprintf(s, "%3d: ", i+1);
+		for (j = 0; j < 16 && n < len; j++, n++){
+			unsigned char c;
+			c = *p++;
+			hex2chars(s+l, c);
+			l += 2;
+			if (j < 15 && (j&0x01)){
+				s[l++] = ' ';
+			}
+		}
+		s[l++] = '\n';
+		s[l] = 0;
+		EL_puts(s);
 	}
 }
 
@@ -976,8 +1003,8 @@ long dt_gettoday_time(const char * stime)
 	return dt_to_day_time(long(time(0)), stime);
 }
 
-long dt_today(void)  {  
-	return dt_gettoday();  
+long dt_today(void)  {
+	return dt_gettoday();
 }
 
 long dt_year(long tt)

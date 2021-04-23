@@ -97,6 +97,13 @@ int xsys_log::flush(void)
 	return 0;
 }
 
+int xsys_log::write(int c)
+{
+	if (m_bdebug)
+		fputc(c, stdout);
+	return fputc(c, m_hlogfile);
+}
+
 int xsys_log::write(const char * s)
 {
 	if (!s || *s == 0)

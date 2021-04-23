@@ -39,7 +39,6 @@ xsys_tcp_server2::xsys_tcp_server2()
 	, m_precv_buf(0)
 	, m_recv_len(0)
 {
-	m_serverURL[0] = 0;
 	m_pused_index = NULL;
 	m_used_count = 0;
 }
@@ -55,7 +54,6 @@ xsys_tcp_server2::xsys_tcp_server2(const char * name, int nmaxexception)
 {
 	m_pused_index = NULL;
 	m_used_count = 0;
-	m_serverURL[0] = 0;
 }
 
 // 关闭已用标记的第i_used个会话，返回实际的序号
@@ -154,7 +152,6 @@ bool xsys_tcp_server2::open(int listen_port, int ttl, int max_sessions, int recv
 
 bool xsys_tcp_server2::open(const char * url,int ttl, int recv_len)
 {
-	strncpy(m_serverURL, url, sizeof(m_serverURL)-1);  m_serverURL[sizeof(m_serverURL)-1] = 0;
 	return open(0, ttl, 32, recv_len, 2048);
 }
 
@@ -352,7 +349,7 @@ void xsys_tcp_server2::run(void)
 				continue;
 			}
 
-			write_buf_log(szFunctionName, (unsigned char *)m_precv_buf, len);
+			write_buf_hex_log(szFunctionName, (unsigned char *)m_precv_buf, len);
 
 			// receive data
 			m_psessions[i].recv_sum += len;	// increase the sum
