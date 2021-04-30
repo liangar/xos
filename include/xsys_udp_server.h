@@ -1,12 +1,14 @@
 #pragma once
 
 #include <thread>
+#include <xslm_deque.h>
 #include <xsys_tcp_server.h>
 
 #define PUDPSESSION_ISOPEN(p)	((p)->recv_state != XTS_SESSION_END)
 // ((p)->addr_crc != 0)
 
 struct xudp_session{
+	int i;
 	SYS_INET_ADDR	addr;	/// 通讯地址
 	volatile int 	addr_crc;
 
@@ -23,7 +25,7 @@ struct xudp_session{
 
 	int		recv_count; 	/// 总共接收的包
 	
-	SYS_SOCKET target_sock; /// 转发的目标地址
+	volatile SYS_SOCKET target_sock; /// 转发的目标地址
 
 	union{
 		volatile int	peerid;		/// 连接对方的 id 标识, 给应用使用
@@ -32,9 +34,21 @@ struct xudp_session{
 	volatile void * pcmd;
 };
 
+class xudp_sessions : public xslm_deque<xudp_session>{
+protected:
+	int compare(const xudp_session *t1, const xudp_session *t2){
+		return (t1->i - t2->i);
+	}
+
+	void show_t(FILE * pf, const xudp_session * t)
+	{
+		fprintf(pf, "i=%d addr=%08X %p", t->i, t->addr_crc, t->pdev);
+	}
+};
+
 class xsys_udp_server : public xwork_server
 {
-#define XUDPSESSION_INRANGE(i)	(i >= 0 && i < m_session_count)
+#define XUDPSESSION_INRANGE(i)	(i >= 0 && i < s_q_.amount_)
 public:
 	/// 构造
 	xsys_udp_server();
@@ -61,9 +75,9 @@ public:
 		return &m_recv_queue;
 	}
 	xudp_session * get_session(int i){
-		if (i < 0 || i >= m_session_count)
-			return 0;
-		return m_psessions + i;
+		if (i < 0 || i >= s_q_.count_ || s_ == nullptr)
+			return nullptr;
+		return s_ + i;
 	}
 
 	void set_session_idle(int isession, int idle_secs);
@@ -87,6 +101,7 @@ public:
 
 protected:
 	void run(void);			/// 接收处理线程
+	void timeout_check(void);
 
 	/// 转发函数判断
 	virtual const char * get_target_url(int isession, char * pbuf, int len);
@@ -107,10 +122,6 @@ protected:
 	int opened_find(bool &for_trans, int * crc, SYS_INET_ADDR * addr);
 
 	void session_open(int i);
-//	void session_close(xudp_session * psession);
-	// 关闭已用标记的第i_used个会话，返回实际的序号
-	int  session_close_used(int i_used);
-	int session_close_used_by_i(int i_session);
 
 	void session_recv_reset(int i);
 	int session_recv_to_request(int i, int len);
@@ -119,10 +130,8 @@ protected:
 	void close_all_session(void);
 
 protected:
-	xudp_session *	m_psessions;	/// 会话
-	int 		*m_pused_index; 	/// 正在使用的连接
-	volatile int m_used_count;		/// 正在使用的数量
-	int			m_session_count;
+	xudp_sessions	s_q_;	/// 会话队列
+	xudp_session	*s_;	/// 会话
 
 	xseq_buf	m_recv_queue;	/// 保存提交数据(循环队列)
 	xseq_buf	m_send_queue;	/// 保存发送数据
@@ -132,7 +141,7 @@ protected:
 	volatile bool	m_has_new_cmd;	/// 标志：有新消息
 
 protected:
-	volatile int	m_listen_port;	/// 端口
+	volatile int	port_;	/// 端口
 	char		m_serverURL[64];/// 服务端的URL地址
 
 	xsys_socket * m_plisten_sock;

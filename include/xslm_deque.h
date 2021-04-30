@@ -35,7 +35,7 @@ public:
 	/// 从空闲队列中取出一个项
 	/// @param x: [out] 存放索引的指针，以便于使用
 	/// @return 项的索引位置, -1 没取到
-	int	get(T ** x);
+	int	get(T ** x = nullptr);
 
 	/// 将取出的项放到使用队列的尾部
 	/// @param i: [in], get 所取得的索引位置
@@ -166,7 +166,8 @@ int xslm_deque<T>::get(T ** x)
 		return -1;
 	
 	int i = free_;	// free 的头一个index
-	*x = buf_ + i;	// 取得项
+	if (x)
+		*x = buf_ + i;	// 取得项
 	
 	int i_post = indexs_[i].i_post,
 		i_pre  = indexs_[i].i_pre;
