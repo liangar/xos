@@ -563,7 +563,7 @@ static int  s_level = 0;
 static int  s_timestamp_secs  = 60;
 static int  s_time = 0;
 
-char * time2string(char * d, long t)
+char * time2str(char * d, long t)
 {
 	struct tm *ltime;
 	time_t tt = (time_t)t;
@@ -575,7 +575,7 @@ char * time2string(char * d, long t)
 char * get_now(char *d)
 {
 	long t = long(time(NULL));
-	time2string(d, t);
+	time2str(d, t);
 	return d;
 }
 
@@ -641,7 +641,7 @@ void log_print(const char * format, ...)
 	time_t t = time(NULL);
 	if (int(t - prev_time) > s_timestamp_secs){
 		char now[32];
-		time2string(now, long(t));
+		time2str(now, long(t));
 	
 		if (s_for_debug){
 			log_put(now);  log_put('|');

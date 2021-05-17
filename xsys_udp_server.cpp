@@ -52,7 +52,7 @@ xsys_udp_server::xsys_udp_server()
 	, m_recv_len(0)
 	, m_session_idle(10)
 	, m_plisten_sock(nullptr)
-	, m_has_new_cmd(false)
+	, has_new_cmd_(false)
 {
 	m_serverURL[0] = 0;
 	m_send_len = 0;
@@ -67,7 +67,7 @@ xsys_udp_server::xsys_udp_server(const char * name, int nmaxexception)
 	, m_recv_len(0)
 	, m_session_idle(10)
 	, m_plisten_sock(nullptr)
-	, m_has_new_cmd(false)
+	, has_new_cmd_(false)
 {
 	m_serverURL[0] = 0;
 	m_send_len = 0;
@@ -89,8 +89,9 @@ void xsys_udp_server::timeout_check(void)
 {
 	static const char szFunctionName[] = "xsys_udp2::timeout_check";
 
-	int i, i_s;
-	for (i = 0, i_s = s_q_.first(); i < s_q_.count_; i++, i_s = s_q_.post(i_s)){
+	int i, i_s, count = s_q_.count_, i_post;
+	for (i = 0, i_s = s_q_.first(); i < count; i++, i_s = i_post){
+		i_post = s_q_.post(i_s);
 		if (XSYS_UDP_SESSION_TIMEOUT(i_s)){
 			WriteToEventLog("%s: client[%d] timeout[%d/20](%d - %d)",
 				szFunctionName, i_s, m_session_ttl, int(s_[i_s].createTime), m_heartbeat
@@ -258,15 +259,15 @@ void xsys_udp_server::run(void)
 			if (!XUDPSESSION_INRANGE(i)) {
 				WriteToEventLog("%s: 关闭无效会话(%d)", szFunctionName, i);
 				continue;
-			}else if (t < s_[i].createTime) {
+			}else if (!PUDPSESSION_ISOPEN(s_+i) || t < s_[i].createTime) {
 				WriteToEventLog("%s: 忽略过期关闭%d, %d <= %d", szFunctionName, i, t, s_[i].createTime);
 				continue;
 			}
 
 			WriteToEventLog("%s: get close %d request", szFunctionName, i);
-			lock_prop(2);
+			// lock_prop(2);
 			session_close(i);
-			unlock_prop();
+			// unlock_prop();
 		}
 
 		m_heartbeat = long(time(0));
@@ -274,12 +275,13 @@ void xsys_udp_server::run(void)
 		/// 检查所有空闲的session，并调用处理方法
 		// lock_prop(1);
 		if (m_heartbeat - time_check_time > 6 && s_q_.count_){
-			int i, i_s;
-			for (i = 0, i_s = s_q_.first(); i < s_q_.count_; i++, i_s = s_q_.post(i_s)){
+			int i, i_s, count = s_q_.count_, i_post;
+			for (i = 0, i_s = s_q_.first(); i < count; i++, i_s = i_post){
+				i_post = s_q_.post(i_s);
 				if (XSYS_UDP_SESSION_TIMEOUT(i_s)){
 					WriteToEventLog("%s: client[%d/%d] timeout[%d](%d, %d, %d)", szFunctionName, i, i_s, m_session_ttl, int(s_[i_s].createTime), int(s_[i_s].last_recv_time), m_heartbeat);
-					// 由于close之后，m_used_count会减1，且之后的会前移，故此i保持不变
-					session_close(i_s);
+					if (session_close(i_s) == 1)
+						s_q_.del(i_s);
 				}else if (s_[i_s].idle_secs > 0 &&
 					m_heartbeat >= s_[i_s].last_trans_time + s_[i_s].idle_secs)
 				{
@@ -851,8 +853,9 @@ void xsys_udp_server::relay_server(void)
 
 void xsys_udp_server::close_all_session(void)
 {
-	int i, i_s;
-	for (i = 0, i_s = s_q_.first(); i < s_q_.count_; i++, i_s = s_q_.post(i_s)){
+	int i, i_s, i_post, count = s_q_.count_;
+	for (i = 0, i_s = s_q_.first(); i < count; i++, i_s = i_post){
+		i_post = s_q_.post(i_s);
 		if (PUDPSESSION_ISOPEN(s_+i_s))
 			session_close(i_s);
 	}
@@ -976,28 +979,31 @@ bool xsys_udp_server::session_isopen(int i)
 	return PUDPSESSION_ISOPEN(psession);
 }
 
-void xsys_udp_server::session_close(int i)
+int xsys_udp_server::session_close(int i)
 {
 	static const char szFunctionName[] = "x_udp_svr::session_close";
 
 	if (!XUDPSESSION_INRANGE(i)){
 		WriteToEventLog("%s: i = %d is out range[0~%d]", szFunctionName, i, s_q_.count_);
-		return;
+		return -1;
 	}
 
 	xudp_session * psession = s_ + i;
 	if (!PUDPSESSION_ISOPEN(psession)){
 		WriteToEventLog("%s: i = %d is not opened", szFunctionName, i);
-	}else{
-		WriteToEventLog("%s: i = %d will be closed", szFunctionName, i);
-		on_closed(i);
-		if (psession->precv_buf){
-			free(psession->precv_buf);  psession->precv_buf = nullptr;
-		}
-		psession->recv_state = XTS_SESSION_END;
-		WriteToEventLog("%s: i = %d is closed", szFunctionName, i);
-		s_q_.del(i);
+		return 1;
 	}
+	
+	WriteToEventLog("%s: i = %d will be closed", szFunctionName, i);
+	on_closed(i);
+	if (psession->precv_buf){
+		free(psession->precv_buf);  psession->precv_buf = nullptr;
+	}
+	psession->recv_state = XTS_SESSION_END;
+	WriteToEventLog("%s: i = %d is closed", szFunctionName, i);
+	s_q_.del(i);
+
+	return 0;
 }
 
 void xsys_udp_server::session_recv_reset(int i)
@@ -1119,23 +1125,6 @@ void xsys_udp_server::notify_do_cmd(const char * cmd)
 		sign_new_cmd();
 	}else
 		m_recv_queue.put(-1, cmd, strlen(cmd));
-}
-
-void xsys_udp_server::sign_new_cmd(bool has_new)
-{
-//	lock_prop(1);
-	m_has_new_cmd = has_new;
-//	unlock_prop();
-}
-
-bool xsys_udp_server::has_new_cmd(void)
-{
-	bool b;
-//	lock_prop(1);
-	b = m_has_new_cmd;
-//	unlock_prop();
-
-	return b;
 }
 
 const char * xsys_udp_server::get_target_url(int isession, char * pbuf, int len)

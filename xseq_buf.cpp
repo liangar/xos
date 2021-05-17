@@ -238,10 +238,14 @@ int xseq_buf::get(long * id, void * d)
 
 int xseq_buf::get(xseq_buf_use * use)
 {
+	if (use == nullptr)
+		return 0;
+
 	memset(use, 0, sizeof(xseq_buf_use));
 
-	if (m_psem->P(m_timeout_ms) != 0)
-		return -1;
+	int r = m_psem->P(m_timeout_ms);
+	if (r != 0)
+		return r;
 
 	m_hmutex->lock(2000);
 
@@ -280,8 +284,9 @@ int xseq_buf::get_free(long * id, char * pdata)
 		m_hmutex->unlock();
 		return -1;
 	}
-	*id = use.id;
-	if (use.len > 0){
+	if (id)
+		*id = use.id;
+	if (use.len > 0 && pdata != nullptr){
 		memcpy(pdata, use.p, use.len);	pdata[use.len] = 0;
 	}
 
