@@ -86,13 +86,13 @@ public:
 	int send(int isession, const char * s, int len);
 	int send(int isession, const char * s);
 
-	void session_close(int i);
+	int  session_close(int i);
 	bool session_isopen(int i);
 	int notify_close_session(int i, bool need_shift = true);
 
 	void notify_do_cmd(const char * cmd = 0);
-	void sign_new_cmd (bool has_new = true);
-	bool has_new_cmd(void);
+	inline void sign_new_cmd (bool has_new = true)  { has_new_cmd_ = has_new; }
+	inline bool has_new_cmd(void)  {  return has_new_cmd_;  }
 
 	/// 服务线程函数
 	void send_server(void);	/// 发送处理线程
@@ -138,7 +138,7 @@ protected:
 	xseq_buf	m_close_requests; 	/// 关闭通知
 	xseq_buf	m_relay_queue;	/// 转发通知 2020-04-14
 
-	volatile bool	m_has_new_cmd;	/// 标志：有新消息
+	volatile bool	has_new_cmd_;	/// 标志：有新消息
 
 protected:
 	volatile int	port_;	/// 端口

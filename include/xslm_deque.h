@@ -223,39 +223,40 @@ int xslm_deque<T>::del(int i)
 	if (i < 0 || i >= amount_ || is_empty())
 		return 0;
 
-	xslm_index * x = indexs_ + i;
-	// 从原队列拿下
-
+	// 如果是孤立节点，也可以用del释放
+	// 支持 get 之后，释放没有进行 add 的节点
+	bool is_isolated = (indexs_[i].i_pre == indexs_[i].i_post && indexs_[i].i_post == i);
+		
 	// 找到使用项
-	int j;
-	xslm_index * y = indexs_ + used_;
-	for (j = 0; j < count_; ++j){
-		if (y == x)
-			break;
-		y = indexs_ + y->i_post;
+	int j = first();
+	if (!is_isolated){
+		for (int n = 0; j != i && n < count_; n++, j = post(j))
+			;
 	}
 		
-	if (y != x)
+	// 从原队列拿下
+	if (j == i){
+		if (count_ == 1) {
+			used_ = -1;
+		}else{
+			if (used_ == i)
+				used_ = post(i);
+			indexs_[post(i)].i_pre  = prev(i);
+			indexs_[prev(i)].i_post = post(i);
+		}
+		--count_;
+	}else if (!is_isolated)
 		return 0;
 
-	if (count_ == 1) {
-		used_ = -1;
-	}else{
-		if (used_ == i)
-			used_ = x->i_post;
-		indexs_[x->i_post].i_pre = x->i_pre;
-		indexs_[x->i_pre].i_post = x->i_post;
-	}
-	--count_;
-
+	// 放入free队列中
 	if (free_ == -1){
 		free_ = i;
 		indexs_[i].i_post = indexs_[i].i_pre = i;
 	}else{
-		// 放入free队列中
-		int i_post = indexs_[free_].i_pre;	// free 的尾
-		indexs_[i_post].i_post = i;
-		indexs_[i].i_pre = i_post;
+		// 放入free队列的末尾
+		int i_tail = indexs_[free_].i_pre;	// free 的尾
+		indexs_[i_tail].i_post = i;
+		indexs_[i].i_pre = i_tail;
 		indexs_[i].i_post= free_;
 		indexs_[free_].i_pre = i;
 	}
@@ -270,7 +271,7 @@ int xslm_deque<T>::del(const T * x)
 	int i_y = used_;
 	for (i = 0; i < count_; i++){
 		T * y = buf_ + i_y;
-		if (compare(x, y) == 0)
+		if (x == y || compare(x, y) == 0)
 			return del(i_y);
 		
 		i_y = indexs_[i_y].i_post;
